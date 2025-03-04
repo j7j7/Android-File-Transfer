@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>File Viewer</title>
+  <style>
+    /* Reset CSS */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: #1e1e1e;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .viewer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 15px;
+      background-color: #2d2d2d;
+      border-bottom: 1px solid #3a3a3a;
+      -webkit-app-region: drag; /* Make the header draggable */
+    }
+    
+    .viewer-title {
+      font-size: 16px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .viewer-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      -webkit-app-region: no-drag; /* Make controls clickable */
+    }
+    
+    .viewer-close-btn {
+      background: none;
+      border: none;
+      color: #ffffff;
+      font-size: 16px;
+      cursor: pointer;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+    }
+    
+    .viewer-close-btn:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+    
+    .viewer-content {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      overflow: auto;
+      position: relative;
+    }
+    
+    /* Media Content Styles */
+    img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    
+    video, audio {
+      max-width: 100%;
+      max-height: 100%;
+    }
+    
+    .temp-file-hint {
+      position: absolute;
+      bottom: 10px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      background-color: rgba(0, 0, 0, 0.7);
+      padding: 8px;
+      font-size: 12px;
+      color: #ffffff;
+    }
+    
+    .error {
+      color: #ff6b6b;
+      font-size: 16px;
+      text-align: center;
+    }
+
+    /* Zoom controls */
+    .zoom-controls {
+      position: absolute;
+      bottom: 15px;
+      right: 15px;
+      display: flex;
+      background-color: rgba(0, 0, 0, 0.6);
+      border-radius: 20px;
+      padding: 5px 10px;
+      z-index: 100;
+    }
+
+    .zoom-btn {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 18px;
+      width: 30px;
+      height: 30px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .zoom-btn:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+    }
+
+    .zoom-level {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 10px;
+      font-size: 14px;
+      min-width: 50px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="viewer-header">
+    <div class="viewer-title" id="file-title">File Viewer</div>
+    <div class="viewer-controls">
+      <button class="viewer-close-btn" id="close-btn">✖</button>
+    </div>
+  </div>
+  <div class="viewer-content" id="content-container">
+    <!-- Content will be inserted here by the renderer -->
+  </div>
+
+  <script>
+    // This script will handle the viewer window functionality
+    const { ipcRenderer } = require('electron');
+    
+    // Get references to elements
+    const fileTitle = document.getElementById('file-title');
+    const contentContainer = document.getElementById('content-container');
+    const closeBtn = document.getElementById('close-btn');
+    
+    // Handle close button click
+    closeBtn.addEventListener('click', () => {
+      ipcRenderer.send('close-viewer');
+    });
+    
+    // Listen for file data from the main process
+    ipcRenderer.on('file-data', (event, data) => {
+      // Update the window title
+      fileTitle.textContent = data.fileName;
+      document.title = `Viewing: ${data.fileName}`;
+      
+      // Create content based on file type
+      let content = '';
+      let zoomControls = '';
+      
+      switch (data.fileType) {
+        case 'image':
+          content = `<img src="file://${data.filePath}" alt="${data.fileName}" id="viewer-image" />`;
+          // Add zoom controls for images
+          zoomControls = `
+            <div class="zoom-controls">
+              <button class="zoom-btn" id="zoom-out">-</button>
+              <div class="zoom-level" id="zoom-level">100%</div>
+              <button class="zoom-btn" id="zoom-in">+</button>
+            </div>
+          `;
+          break;
+          
+        case 'audio':
+          content = `
+            <audio controls autoplay>
+              <source src="file://${data.filePath}" type="audio/${data.fileName.split('.').pop()}">
+              Your browser does not support this audio format.
+            </audio>
+          `;
+          break;
+          
+        case 'video':
+          content = `
+            <video controls autoplay>
+              <source src="file://${data.filePath}" type="video/${data.fileName.split('.').pop()}">
+              Your browser does not support this video format.
+            </video>
+          `;
+          break;
+          
+        default:
+          content = `<div class="error">Cannot preview this file type</div>`;
+      }
+      
+      // Set the content
+      contentContainer.innerHTML = content + zoomControls;
+      
+      // Add temp file notice if needed
+      if (!data.isLocal) {
+        const tempHint = document.createElement('div');
+        tempHint.className = 'temp-file-hint';
+        tempHint.textContent = 'This is a temporary copy from your Android device';
+        contentContainer.appendChild(tempHint);
+      }
+      
+      // Set up image zoom functionality if this is an image
+      if (data.fileType === 'image') {
+        const image = document.getElementById('viewer-image');
+        const zoomIn = document.getElementById('zoom-in');
+        const zoomOut = document.getElementById('zoom-out');
+        const zoomLevel = document.getElementById('zoom-level');
+        
+        let scale = 1;
+        
+        // Update zoom level display
+        function updateZoomLevel() {
+          zoomLevel.textContent = `${Math.round(scale * 100)}%`;
+        }
+        
+        // Zoom in button
+        zoomIn.addEventListener('click', () => {
+          scale = Math.min(scale + 0.1, 3); // Max zoom 300%
+          image.style.transform = `scale(${scale})`;
+          updateZoomLevel();
+        });
+        
+        // Zoom out button
+        zoomOut.addEventListener('click', () => {
+          scale = Math.max(scale - 0.1, 0.1); // Min zoom 10%
+          image.style.transform = `scale(${scale})`;
+          updateZoomLevel();
+        });
+        
+        // Mouse wheel zoom
+        contentContainer.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          if (e.deltaY < 0) {
+            // Zoom in
+            scale = Math.min(scale + 0.1, 3);
+          } else {
+            // Zoom out
+            scale = Math.max(scale - 0.1, 0.1);
+          }
+          image.style.transform = `scale(${scale})`;
+          updateZoomLevel();
+        });
+      }
+    });
+  </script>
+</body>
+</html> 

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<!--
+  index.html
+  
+  Main HTML structure for the OSX Android File Transfer application.
+  This file defines the UI layout including:
+  - Header with device selection
+  - Side-by-side file explorers for local and Android files
+  - Transfer controls
+  - Status bar for feedback and progress indication
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self';">
+  <meta http-equiv="X-Content-Security-Policy" content="script-src 'self';">
+  <title>Android File Transfer</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Add styles for the custom modal dialog */
+    #custom-modal-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    
+    #custom-modal-container .modal-content {
+      background-color: white;
+      border-radius: 5px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+      padding: 20px;
+      min-width: 300px;
+      max-width: 500px;
+    }
+    
+    #custom-modal-container h3 {
+      margin-top: 0;
+      margin-bottom: 15px;
+    }
+    
+    #custom-modal-container .path-display {
+      margin-bottom: 10px;
+      font-size: 12px;
+      color: #666;
+      word-break: break-all;
+    }
+    
+    #custom-modal-container .input-group {
+      margin-bottom: 15px;
+    }
+    
+    #custom-modal-container label {
+      display: block;
+      margin-bottom: 5px;
+    }
+    
+    #custom-modal-container input {
+      width: 100%;
+      padding: 8px;
+      box-sizing: border-box;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    
+    #custom-modal-container .button-group {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    
+    #custom-modal-container button {
+      padding: 8px 15px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    #custom-modal-container .cancel-btn {
+      background-color: #f1f1f1;
+    }
+    
+    #custom-modal-container .create-btn {
+      background-color: #007bff;
+      color: white;
+    }
+    
+    #custom-modal-container .error-message {
+      color: red;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <h1>Android File Transfer</h1>
+    <div class="device-controls">
+      <select id="device-select">
+        <option value="">Select a device</option>
+      </select>
+      <button id="refresh-devices">Refresh Devices</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="file-explorer-container">
+      <!-- Local File Explorer -->
+      <div id="local-explorer" class="file-explorer local">
+        <div class="explorer-header">
+          <h2>Local Files</h2>
+          <div class="path-navigation">
+            <button id="local-back" class="back-button">⬅️</button>
+            <div class="local-path-container">
+              <input type="text" id="local-path" class="path-input" placeholder="Local path">
+              <button id="local-go" class="go-button">Go</button>
+            </div>
+          </div>
+        </div>
+        <div class="file-operations">
+          <button id="local-new-folder" class="new-folder-button">New Folder</button>
+          <button id="local-delete" class="delete-button">Delete</button>
+          <button id="local-refresh" class="refresh-button">↻</button>
+        </div>
+        <div id="local-files" class="files-list"></div>
+      </div>
+
+      <!-- Transfer Controls -->
+      <div class="transfer-controls">
+        <button id="transfer-to-android" class="transfer-button">→</button>
+        <button id="transfer-to-local" class="transfer-button">←</button>
+        <button id="swap-sides" class="transfer-button">↔️</button>
+      </div>
+
+      <!-- Android File Explorer -->
+      <div id="android-explorer" class="file-explorer android">
+        <div class="explorer-header">
+          <h2>Android Files</h2>
+          <div class="path-navigation">
+            <button id="android-back" class="back-button">⬅️</button>
+            <div class="android-path-container">
+              <input type="text" id="android-path" class="path-input" placeholder="Android path">
+              <button id="android-go" class="go-button">Go</button>
+            </div>
+          </div>
+        </div>
+        <div class="file-operations">
+          <button id="android-new-folder" class="new-folder-button">New Folder</button>
+          <button id="android-delete" class="delete-button">Delete</button>
+          <button id="android-refresh" class="refresh-button">↻</button>
+        </div>
+        <div id="android-files" class="files-list"></div>
+      </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <div class="status-message" id="status-message">Ready</div>
+      <div class="progress-container">
+        <div class="progress-bar">
+          <div class="progress-fill"></div>
+        </div>
+      </div>
+      <div class="progress-text"></div>
+    </div>
+
+    <!-- Media Viewer Modal -->
+    <div id="media-viewer" class="media-viewer">
+      <div class="media-viewer-content">
+        <div class="media-viewer-header">
+          <h3 id="media-viewer-title">File Preview</h3>
+          <button id="media-viewer-close" class="close-button">×</button>
+        </div>
+        <div id="media-container" class="media-container"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Load the renderer process JS -->
+  <script src="renderer.js"></script>
+</body>
+</html> 

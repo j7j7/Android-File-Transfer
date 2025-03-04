@@ -1,0 +1,91 @@
+{
+  "name": "android-file-transfer",
+  "version": "1.0.0",
+  "description": "Application to manage and transfer files between your computer and Android devices via USB",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "npm run generate-mac-icon && electron-builder --mac",
+    "generate-mac-icon": "node create-mac-icon.js"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "canvas": "^3.1.0",
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1"
+  },
+  "dependencies": {
+    "adbkit": "^2.11.1",
+    "electron-store": "^8.1.0",
+    "rimraf": "^5.0.5",
+    "temp": "^0.9.4"
+  },
+  "build": {
+    "appId": "com.androidfiletransfer",
+    "productName": "Android File Transfer",
+    "files": [
+      "**/*",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!**/node_modules/*.d.ts",
+      "!**/node_modules/.bin",
+      "!**/.{idea,git,gitignore,travis,dsl_generated,flowconfig,nyc_output}",
+      "!**/{.DS_Store,*.log,*.md}"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "build/icon.png",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "darkModeSupport": true
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "iconpicture.bmp",
+      "artifactName": "Android-File-Transfer-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Android File Transfer"
+    },
+    "portable": {
+      "artifactName": "Android-File-Transfer-Portable-${version}.${ext}"
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 540,
+        "height": 380
+      }
+    },
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    }
+  }
+}
