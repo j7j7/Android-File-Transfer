@@ -8,8 +8,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "electron-builder",
     "build:win": "electron-builder --win",
-    "build:mac": "npm run generate-mac-icon && electron-builder --mac",
-    "generate-mac-icon": "node create-mac-icon.js"
+    "build:mac": "electron-builder --mac"
   },
   "author": "",
   "license": "MIT",
@@ -42,7 +41,7 @@
         "dmg",
         "zip"
       ],
-      "icon": "build/icon.png",
+      "icon": "icon.png",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "darkModeSupport": true
