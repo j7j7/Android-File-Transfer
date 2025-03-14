@@ -14,6 +14,10 @@ A cross-platform application for transferring files between your computer and An
 - **No Android App Required**: Works directly with Android's USB debugging
 - **Platform-Specific Optimizations**: Native drive selection for Windows, streamlined macOS experience
 
+![image](https://github.com/user-attachments/assets/df274172-bf53-44a8-97a3-cbf8f7339484)
+
+
+
 ## Requirements
 
 - macOS 10.13 or later, or Windows 10 or later
