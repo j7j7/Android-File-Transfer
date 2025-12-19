@@ -101,126 +101,75 @@ function findAdbInCommonLocations() {
   let installations = [];
 
   try {
-    // Check for ADB in application directory first
+    // Definições no início da função (corrigido!)
     const appDir = path.dirname(app.getPath('exe'));
-    
-    // Platform-specific executable name
     const adbExe = process.platform === 'win32' ? 'adb.exe' : 'adb';
-    
-    // Check app directory and resources
-    const appDirAdb = path.join(appDir, adbExe);
-    const resourcesAdb = path.join(appDir, 'resources', adbExe);
-    
-    console.log(`Checking application directory: ${appDir}`);
-    if (fs.existsSync(appDirAdb)) {
-      console.log(`Found ADB in app directory: ${appDirAdb}`);
-      installations.push(appDirAdb);
-    }
-    
-    if (fs.existsSync(resourcesAdb)) {
-      console.log(`Found ADB in resources directory: ${resourcesAdb}`);
-      installations.push(resourcesAdb);
-    }
-    
-    // Common installation locations - platform specific
-    let locations = [];
-    
-    if (process.platform === 'win32') {
-      // Windows locations
-      locations = [
-        // Application directory and nearby locations first
-        path.join(appDir, '..', adbExe),
-        path.join(appDir, '..', 'resources', adbExe),
-        
-        // Standard locations
-        'C:\\Program Files\\Android\\android-sdk\\platform-tools\\adb.exe',
-        'C:\\Program Files (x86)\\Android\\android-sdk\\platform-tools\\adb.exe',
-        'C:\\Program Files\\Android\\android-sdk\\platform-tools\\adb.exe',
-        'C:\\Program Files (x86)\\Android\\android-sdk\\platform-tools\\adb.exe',
-        'C:\\Program Files\\Meta Quest Developer Hub\\resources\\bin\\adb.exe',
-        'C:\\Program Files (x86)\\Meta Quest Developer Hub\\resources\\bin\\adb.exe',
-        'C:\\Program Files\\Oculus\\Support\\oculus-adb.exe',
-        'C:\\Program Files\\Oculus\\Support\\oculus-diagnostics\\adb.exe',
-        path.join(process.env.LOCALAPPDATA || '', 'Android\\Sdk\\platform-tools\\adb.exe'),
-        path.join(process.env.USERPROFILE || '', 'AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe'),
-        // Add Android Studio location
-        path.join(process.env.LOCALAPPDATA || '', 'Android\\sdk\\platform-tools\\adb.exe'),
-        // Add Oculus locations
-        path.join(process.env.LOCALAPPDATA || '', 'Oculus\\Support\\oculus-adb.exe'),
-        path.join(process.env.LOCALAPPDATA || '', 'Oculus\\Support\\oculus-diagnostics\\adb.exe')
-      ];
-    } else {
-      // macOS/Linux locations
-      const homeDir = process.env.HOME || os.homedir();
-      locations = [
-        // Application directory and nearby locations
-        path.join(appDir, '..', adbExe),
-        path.join(appDir, '..', 'Resources', adbExe),
-        
-        // Standard macOS locations
-        '/usr/local/bin/adb',
-        '/usr/bin/adb',
-        path.join(homeDir, 'Library/Android/sdk/platform-tools/adb'),
-        path.join(homeDir, 'Android/Sdk/platform-tools/adb'),
-        '/Applications/Android Studio.app/Contents/platform-tools/adb',
-        '/Applications/Android Studio.app/sdk/platform-tools/adb',
-        '/Applications/Unity/Hub/Editor/*/PlaybackEngines/AndroidPlayer/SDK/platform-tools/adb',
-        '/Applications/Unity/Hub/Editor/*/PlaybackEngines/AndroidPlayer/platform-tools/adb'
-      ];
+
+    // Função auxiliar para validar ADB real (ignora placeholder falso do Electron)
+    const isValidAdb = (adbPath) => {
+      if (!fs.existsSync(adbPath)) return false;
+
+      try {
+        const stats = fs.statSync(adbPath);
+        if (stats.size < 500 * 1024) { // Menos de ~500KB → provavelmente falso
+          console.log(`Ignoring fake ADB (size: ${stats.size} bytes): ${adbPath}`);
+          return false;
+        }
+
+        // Teste rápido com "adb version"
+        execSync(`"${adbPath}" version`, { stdio: 'ignore', timeout: 5000 });
+        return true;
+      } catch (err) {
+        console.log(`ADB found but not working: ${adbPath}`);
+        return false;
+      }
+    };
+
+    // 1. Prioridade máxima: pasta "platform-tools" ao lado do executável (para bundle portátil)
+    const bundledPath = path.join(appDir, 'platform-tools', adbExe);
+    if (fs.existsSync(bundledPath) && isValidAdb(bundledPath)) {
+      console.log(`Valid ADB found on bundled: ${bundledPath}`);
+      installations.push(bundledPath);
     }
 
-    // Check each location
+    // 2. Direto na pasta do app
+    const appDirAdb = path.join(appDir, adbExe);
+    if (fs.existsSync(appDirAdb) && isValidAdb(appDirAdb)) {
+      console.log(`Valid ADB found in app directory: ${appDirAdb}`);
+      installations.push(appDirAdb);
+    }
+
+    // 3. Pasta resources (onde o Electron coloca o falso)
+    const resourcesAdb = path.join(appDir, 'resources', adbExe);
+    if (fs.existsSync(resourcesAdb) && isValidAdb(resourcesAdb)) {
+      console.log(`Valid ADB found in resources: ${resourcesAdb}`);
+      installations.push(resourcesAdb);
+    }
+
+    // 4. Locais comuns do sistema (Android SDK, etc.)
+    const locations = process.platform === 'win32' 
+      ? [
+          path.join(process.env.LOCALAPPDATA || '', 'Android\\Sdk\\platform-tools\\adb.exe'),
+          'C:\\Program Files\\Android\\android-sdk\\platform-tools\\adb.exe',
+          'C:\\Program Files (x86)\\Android\\android-sdk\\platform-tools\\adb.exe',
+          // Adicione mais se quiser
+        ]
+      : [
+          path.join(os.homedir(), 'Library/Android/sdk/platform-tools/adb'),
+          '/usr/local/bin/adb',
+          '/usr/bin/adb',
+        ];
+
     locations.forEach(location => {
-      if (fs.existsSync(location)) {
-        console.log(`Found ADB at: ${location}`);
+      if (fs.existsSync(location) && isValidAdb(location)) {
+        console.log(`Valid ADB found in common location: ${location}`);
         installations.push(location);
       }
     });
-    
-    // Also check for ADB in Unity Hub folders
-    try {
-      const unityHubBase = 'C:\\Program Files\\Unity\\Hub\\Editor';
-      if (fs.existsSync(unityHubBase)) {
-        console.log('Found Unity Hub installation, checking for ADB in version folders...');
-        // Get all Unity version folders
-        const unityVersions = fs.readdirSync(unityHubBase);
-        console.log(`Found ${unityVersions.length} Unity version(s)`);
-        
-        for (const version of unityVersions) {
-          // Multiple possible paths where ADB might be located in Unity installations
-          const possiblePaths = [
-            // Standard path as confirmed by user
-            path.join(unityHubBase, version, 'Editor', 'Data', 'PlaybackEngines', 'AndroidPlayer', 'SDK', 'platform-tools', 'adb.exe'),
-            // Alternative paths that might exist
-            path.join(unityHubBase, version, 'Editor', 'Data', 'PlaybackEngines', 'AndroidPlayer', 'platform-tools', 'adb.exe'),
-            path.join(unityHubBase, version, 'Editor', 'Data', 'PlaybackEngines', 'AndroidPlayer', 'tools', 'adb.exe'),
-            path.join(unityHubBase, version, 'Editor', 'Data', 'PlaybackEngines', 'AndroidPlayer', 'AndroidPlayer', 'SDK', 'platform-tools', 'adb.exe'),
-            path.join(unityHubBase, version, 'Data', 'PlaybackEngines', 'AndroidPlayer', 'SDK', 'platform-tools', 'adb.exe')
-          ];
-          
-          for (const possiblePath of possiblePaths) {
-            if (fs.existsSync(possiblePath)) {
-              console.log(`Found ADB in Unity ${version} installation: ${possiblePath}`);
-              installations.push(possiblePath);
-              
-              // Test if this ADB works by running a simple command
-              if (testAdbInstallation(possiblePath)) {
-                console.log(`Unity ADB at ${possiblePath} is working correctly!`);
-              } else {
-                console.log(`Unity ADB at ${possiblePath} exists but may not be working properly.`);
-              }
-            }
-          }
-        }
-      } else {
-        console.log('Unity Hub folder not found at', unityHubBase);
-      }
-    } catch (unityError) {
-      console.error('Error checking Unity Hub folders:', unityError);
-    }
 
-    console.log(`Found ADB installations: ${JSON.stringify(installations)}`);
+    console.log(`Valid ADB installations found: ${installations.length}`);
     return installations;
+
   } catch (error) {
     console.error('Error searching for ADB:', error);
     return [];
@@ -484,15 +433,51 @@ function createWindow() {
     const foundAdbPath = searchForAdb();
     if (foundAdbPath) {
       initializeAdb(foundAdbPath);
-    } else {
-      console.log('ADB not found automatically, will need manual configuration');
-      // Create an ADB helper file
-      const appDir = path.dirname(app.getPath('exe'));
-      const adbExe = process.platform === 'win32' ? 'adb.exe' : 'adb';
-      const targetAdbPath = path.join(appDir, adbExe);
-      createAdbHelperFile(targetAdbPath);
-      // Notify renderer that ADB wasn't found
-      mainWindow.webContents.send('adb-not-found');
+        } else {
+      console.log('ADB not found automatically. Showing dialog to user.');
+
+      // Mostra diálogo nativo do Electron perguntando se quer baixar
+      dialog.showMessageBox(mainWindow, {
+        type: 'question',
+        buttons: ['Yes, download now', 'No, configure manually'],
+        defaultId: 0,
+        title: 'ADB not found',
+        message: 'ADB (Android Debug Bridge) was not found on your system.',
+        detail: 'ADB is required to connect to Android devices.\n\n' +
+                'Would you like to download the official Android Platform-Tools now?'
+      }).then((response) => {
+        if (response.response === 0) {
+          // Usuário clicou em "Sim" → abre página de download
+          console.log('User chose to download ADB');
+          require('electron').shell.openExternal('https://developer.android.com/studio/releases/platform-tools');
+
+          // Opcional: mostra mensagem informando próximos passos
+          dialog.showMessageBox(mainWindow, {
+            type: 'info',
+            title: 'Download started',
+            message: 'The Platform-Tools download was opened in your browser.',
+            detail: 'After downloading and extracting the file:\n' +
+                    '• Copy the "adb" file (or "adb.exe" on Windows) to the app folder, or\n' +
+                    '• Install it in the default location and restart the app.\n\n' +
+                    'The app will automatically detect ADB on the next launch.'
+          });
+        } else {
+          // Usuário clicou em "Não" → pode procurar manualmente depois
+          console.log('User chose to configure ADB manually later');
+          dialog.showMessageBox(mainWindow, {
+            type: 'info',
+            title: 'ADB not found',
+            message: 'You can connect Android devices after installing ADB manually.',
+            detail: 'When ready, use the "Search ADB" option in the menu or restart the app.'
+          });
+        }
+
+        // Em ambos os casos, avisa o renderer que o ADB não foi encontrado
+        // (para desabilitar funcionalidades ou mostrar mensagem na interface)
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('adb-not-found');
+        }
+      });
     }
   }
   
@@ -765,19 +750,79 @@ ipcMain.handle('list-files', async (event, { deviceId, path: dirPath }) => {
  * @param {string} params.localPath - Destination path on local machine
  * @returns {Object} Success status and any error message
  */
+// ipcMain.handle('pull-file', async (event, { deviceId, remotePath, localPath }) => {
+//   try {
+//     await client.pull(deviceId, remotePath)
+//       .then(transfer => {
+//         return new Promise((resolve, reject) => {
+//           transfer.pipe(require('fs').createWriteStream(localPath))
+//             .on('finish', resolve)
+//             .on('error', reject);
+//         });
+//       });
+//     return { success: true };
+//   } catch (err) {
+//     console.error(`Failed to pull file from ${remotePath}:`, err);
+//     return { success: false, error: err.message };
+//   }
+// });
+
 ipcMain.handle('pull-file', async (event, { deviceId, remotePath, localPath }) => {
   try {
-    await client.pull(deviceId, remotePath)
-      .then(transfer => {
-        return new Promise((resolve, reject) => {
-          transfer.pipe(require('fs').createWriteStream(localPath))
-            .on('finish', resolve)
-            .on('error', reject);
-        });
+    // Primeiro, pega o tamanho do arquivo no Android
+    const stat = await client.stat(deviceId, remotePath);
+    const totalSize = stat.size;
+    console.log('File size detected:', totalSize);
+
+    event.sender.send('transfer-progress', {
+      type: 'pull',
+      file: path.basename(remotePath),
+      transferred: 0,
+      total: totalSize,
+      percent: 0
+    });
+
+    const transfer = await client.pull(deviceId, remotePath);
+
+    transfer.on('progress', (stats) => {
+      const percent = totalSize > 0 ? Math.round((stats.transferred / totalSize) * 100) : 0;
+      event.sender.send('transfer-progress', {
+        type: 'pull',
+        file: path.basename(remotePath),
+        transferred: stats.transferred,
+        total: totalSize,
+        percent
       });
+    });
+
+    transfer.on('end', () => {
+      event.sender.send('transfer-progress', {
+        type: 'pull',
+        file: path.basename(remotePath),
+        transferred: totalSize,
+        total: totalSize,
+        percent: 100,
+        completed: true
+      });
+    });
+
+    // Pipe para o arquivo local
+    await new Promise((resolve, reject) => {
+      const writeStream = fs.createWriteStream(localPath);
+      transfer.pipe(writeStream)
+        .on('close', resolve)
+        .on('error', reject);
+
+      transfer.on('error', reject);
+    });
+
     return { success: true };
   } catch (err) {
-    console.error(`Failed to pull file from ${remotePath}:`, err);
+    console.error('Erro no pull-file:', err);
+    event.sender.send('transfer-error', {
+      type: 'pull',
+      error: err.message || 'Unknown error during file pull'
+    });
     return { success: false, error: err.message };
   }
 });
@@ -792,12 +837,130 @@ ipcMain.handle('pull-file', async (event, { deviceId, remotePath, localPath }) =
  * @param {string} params.remotePath - Destination path on Android device
  * @returns {Object} Success status and any error message
  */
+// ipcMain.handle('push-file', async (event, { deviceId, localPath, remotePath }) => {
+//   try {
+//     await client.push(deviceId, localPath, remotePath);
+//     return { success: true };
+//   } catch (err) {
+//     console.error(`Failed to push file to ${remotePath}:`, err);
+//     return { success: false, error: err.message };
+//   }
+// });
+
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
 ipcMain.handle('push-file', async (event, { deviceId, localPath, remotePath }) => {
+  let totalSize = 0;
   try {
-    await client.push(deviceId, localPath, remotePath);
+    const stats = fs.statSync(localPath);
+    totalSize = stats.size;
+    console.log('File size detected:', formatBytes(totalSize));
+  } catch (err) {
+    console.error('Error getting file size:', err);
+    totalSize = 0;
+  }
+
+  // Envia início imediato
+  event.sender.send('transfer-progress', {
+    type: 'push',
+    file: path.basename(localPath),
+    transferred: 0,
+    total: totalSize,
+    percent: 0
+  });
+
+  const startTime = Date.now();
+
+  try {
+    const transfer = await client.push(deviceId, localPath, remotePath);
+
+    let lastTransferred = 0;
+
+    if (transfer && typeof transfer.on === 'function') {
+      transfer.on('progress', (stats) => {
+        if (stats && typeof stats.transferred === 'number') {
+          lastTransferred = stats.transferred;
+          const percent = totalSize > 0 ? Math.round((lastTransferred / totalSize) * 100) : 0;
+
+          event.sender.send('transfer-progress', {
+            type: 'push',
+            file: path.basename(localPath),
+            transferred: lastTransferred,
+            total: totalSize,
+            percent
+          });
+        }
+        // Se stats for undefined, ignoramos silenciosamente
+      });
+
+      transfer.on('end', () => {
+        console.log('Transfer push ended');
+        event.sender.send('transfer-progress', {
+          type: 'push',
+          file: path.basename(localPath),
+          transferred: totalSize,
+          total: totalSize,
+          percent: 100,
+          completed: true
+        });
+      });
+
+      transfer.on('error', (err) => {
+        console.error('Error during push:', err);
+        event.sender.send('transfer-error', { error: err.message });
+      });
+    }
+
+    // Fallback: progresso estimado por tempo (funciona mesmo se progress não der dados)
+    const estimatedDuration = totalSize > 0 ? Math.max(5000, (totalSize / 1024 / 1024) * 800) : 10000; // ~800ms por MB, mínimo 5s
+
+    const fallbackInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const estimatedTransferred = Math.min(totalSize, (elapsed / estimatedDuration) * totalSize);
+      const percent = totalSize > 0 ? Math.round((estimatedTransferred / totalSize) * 100) : Math.round((elapsed / estimatedDuration) * 100);
+
+      // Só envia se for maior que o último real conhecido
+      if (estimatedTransferred > lastTransferred) {
+        event.sender.send('transfer-progress', {
+          type: 'push',
+          file: path.basename(localPath),
+          transferred: Math.round(estimatedTransferred),
+          total: totalSize,
+          percent
+        });
+      }
+
+      if (percent >= 100) {
+        clearInterval(fallbackInterval);
+      }
+    }, 500);
+
+    // Para o fallback quando terminar de verdade
+    if (transfer && transfer.on) {
+      transfer.on('end', () => clearInterval(fallbackInterval));
+      transfer.on('error', () => clearInterval(fallbackInterval));
+    }
+
+    // Espera o transfer terminar
+    await new Promise((resolve, reject) => {
+      if (transfer && transfer.on) {
+        transfer.on('end', resolve);
+        transfer.on('error', reject);
+      } else {
+        setTimeout(resolve, estimatedDuration + 2000);
+      }
+    });
+
     return { success: true };
   } catch (err) {
-    console.error(`Failed to push file to ${remotePath}:`, err);
+    console.error('General push error:', err);
+    event.sender.send('transfer-error', { error: err.message || 'Transfer failed' });
     return { success: false, error: err.message };
   }
 });

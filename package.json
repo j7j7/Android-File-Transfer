@@ -54,6 +54,13 @@
       "icon": "iconpicture.bmp",
       "artifactName": "Android-File-Transfer-Setup-${version}.${ext}"
     },
+    "extraResources": [
+      {
+        "from": "platform-tools/",
+        "to": "platform-tools/",
+        "filter": ["**/*"]
+      }
+    ],
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,

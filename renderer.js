@@ -60,9 +60,35 @@ const progressText = document.querySelector('.progress-text');
  * Set status message helper function
  * 
  * @param {string} message - Status message to display
+ * @param {'success' | 'error' | 'warning' | 'info'} type
  */
-function setStatus(message) {
-  uiOps.setStatus(message, statusMessage);
+// function setStatus(message) {
+//   uiOps.setStatus(message, statusMessage);
+// }
+
+function setStatus(message, type = 'info') {
+  if (!statusMessage) return;
+
+  statusMessage.textContent = message;
+
+  // Remove todas as classes de status anteriores
+  statusMessage.classList.remove('status-success', 'status-error', 'status-warning');
+
+  // Aplica a classe correta com base no tipo
+  switch (type) {
+    case 'success':
+      statusMessage.classList.add('status-success');
+      break;
+    case 'error':
+      statusMessage.classList.add('status-error');
+      break;
+    case 'warning':
+      statusMessage.classList.add('status-warning');
+      break;
+    default:
+      // 'info' ou qualquer outro: sem cor especial
+      break;
+  }
 }
 
 /**
@@ -74,6 +100,7 @@ function setStatus(message) {
 function ensureProgressElements() {
   let progressBarElement = document.querySelector('.progress-fill');
   let progressTextElement = document.querySelector('.progress-text');
+  let progressActiveElement = document.querySelector('.progress-container.acive');
   
   // If progress bar doesn't exist, create it
   if (!progressBarElement || !progressTextElement) {
@@ -123,32 +150,81 @@ function ensureProgressElements() {
  * @param {number} percent - Percentage of progress (0-100)
  * @param {string} text - Text to display in progress bar
  */
-function updateProgressBar(percent, text) {
-  // Ensure progress elements exist
+function updateProgressBar(percent, text = '') {
   const elements = ensureProgressElements();
   
-  try {
-    if (elements.progressBar) {
-      elements.progressBar.style.width = `${percent}%`;
-    }
-    
-    if (elements.progressText) {
-      elements.progressText.textContent = text || `${percent}%`;
-    }
-    
-    if (percent === 0 || percent === 100) {
-      setTimeout(() => {
-        if (elements.progressBar) {
-          elements.progressBar.style.width = '0%';
-        }
-        if (elements.progressText) {
-          elements.progressText.textContent = '';
-        }
-      }, 1000);
-    }
-  } catch (err) {
-    console.error('Error updating progress bar:', err);
+  if (!elements.progressContainer) {
+    // if still no container, create one
+    const container = document.querySelector('.progress-container') || createProgressContainer();
+    elements.progressContainer = container;
   }
+
+  const progressFill = elements.progressBar;
+  const progressTextEl = elements.progressText;
+  const progressContainer = elements.progressContainer;
+
+  if (percent > 0 && percent < 100) {
+    // in progress. Show everything
+    progressContainer.classList.add('active');
+    progressTextEl.classList.add('active');
+    
+    progressFill.style.width = `${percent}%`;
+    progressTextEl.textContent = text || `${Math.round(percent)}%`;
+  } else if (percent >= 100) {
+    // Completed: shows 100% for a second, then hides
+    progressFill.style.width = '100%';
+    progressTextEl.textContent = text || '100%';
+    progressContainer.classList.add('active');
+    progressTextEl.classList.add('active');
+
+    setTimeout(() => {
+      hideProgressBar();
+    }, 1000);
+  } else {
+    hideProgressBar();
+  }
+}
+
+function hideProgressBar() {
+  const elements = ensureProgressElements();
+  if (elements.progressContainer) {
+    elements.progressContainer.classList.remove('active');
+  }
+  if (elements.progressText) {
+    elements.progressText.classList.remove('active');
+    elements.progressText.textContent = '';
+  }
+  if (elements.progressBar) {
+    elements.progressBar.style.width = '0%';
+  }
+}
+
+// Helper to create progress container if missing
+function createProgressContainer() {
+  const statusBar = document.querySelector('.status-bar');
+  if (!statusBar) return null;
+
+  const container = document.createElement('div');
+  container.className = 'progress-container';
+
+  const bar = document.createElement('div');
+  bar.className = 'progress-bar';
+  
+  const fill = document.createElement('div');
+  fill.className = 'progress-fill';
+  
+  bar.appendChild(fill);
+  container.appendChild(bar);
+  
+  // Insert before the existing progress-text or at the end
+  const existingText = document.querySelector('.progress-text');
+  if (existingText) {
+    statusBar.insertBefore(container, existingText);
+  } else {
+    statusBar.appendChild(container);
+  }
+  
+  return container;
 }
 
 // Add debug info container to the DOM
@@ -263,6 +339,41 @@ ipcRenderer.on('adb-found', (event, data) => {
   if (searchButton) {
     searchButton.style.display = 'none';
   }
+});
+
+// Listening for transfer progress updates
+ipcRenderer.on('transfer-progress', (event, data) => {
+  console.log('Event transfer-progress received:', data); // Log para depurar
+
+  const { file, transferred = 0, total = 0, percent = 0, completed } = data;
+
+  let statusText = `Transferring: ${file}`;
+
+  if (total > 0) {
+    const formattedTransferred = formatBytes(transferred);
+    const formattedTotal = formatBytes(total);
+    statusText += ` (${formattedTransferred} of ${formattedTotal}) — ${percent}%`;
+  } else {
+    statusText += ` (${formatBytes(transferred)} transfered)`;
+  }
+
+  setStatus(statusText);
+  updateProgressBar(percent, percent > 0 ? `${percent}%` : '');
+
+  if (completed) {
+    setTimeout(() => {
+      hideProgressBar();
+      setStatus(`Done: ${file}`);
+      loadAndroidFiles();
+      loadLocalFiles();
+    }, 800);
+  }
+});
+
+// Erro na transferência
+ipcRenderer.on('transfer-error', (event, data) => {
+  setStatus(`Error in transfer: ${data.error}`, 'error');
+  hideProgressBar();
 });
 
 // When ADB is not found, update the UI to show a helpful message
@@ -538,6 +649,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }).catch(err => {
     debugLog(`Error getting config info: ${err.message}`);
   });
+
+  hideProgressBar();
 });
 
 /**
@@ -883,17 +996,18 @@ transferToAndroidBtn.addEventListener('click', async (e) => {
   console.log('Transfer to Android button clicked');
   
   if (!state.selectedDevice) {
-    setStatus('No device selected');
+    setStatus('No device selected', 'error');
     return;
   }
   
   if (state.localSelectedItems.size === 0) {
-    setStatus('No items selected for transfer');
+    setStatus('No items selected for transfer', 'warning');
+    hideProgressBar();
     return;
   }
   
   if (state.isTransferring) {
-    setStatus('Transfer already in progress');
+    setStatus('Transfer already in progress', 'error');
     return;
   }
   
@@ -972,11 +1086,13 @@ transferToAndroidBtn.addEventListener('click', async (e) => {
     
     updateProgressBar(100, 'Complete');
     setStatus(`Transfer complete. Success: ${successCount}, Errors: ${errorCount}`);
+    hideProgressBar();
     
     // Directly refresh both views like the Go button does
     loadLocalFiles();
     loadAndroidFiles();
-    setStatus('Transfer completed and views refreshed');
+    setStatus('Transfer completed and views refreshed', 'success');
+    hideProgressBar();
   } catch (err) {
     console.error('Error during transfer to Android:', err);
     setStatus(`Transfer error: ${err.message}`);
@@ -984,9 +1100,11 @@ transferToAndroidBtn.addEventListener('click', async (e) => {
     // Still try to refresh the views in case of error
     loadLocalFiles();
     loadAndroidFiles();
+    hideProgressBar();
   } finally {
     state.isTransferring = false;
     clearSelections();
+    hideProgressBar();
   }
 });
 
@@ -1100,7 +1218,8 @@ transferToLocalBtn.addEventListener('click', async (e) => {
     // Directly refresh both views like the Go button does
     loadLocalFiles();
     loadAndroidFiles();
-    setStatus('Transfer completed and views refreshed');
+    setStatus('Transfer completed and views refreshed', 'success');
+    hideProgressBar();
   } catch (err) {
     console.error('Error during transfer to local:', err);
     setStatus(`Transfer error: ${err.message}`);
@@ -1108,6 +1227,7 @@ transferToLocalBtn.addEventListener('click', async (e) => {
     // Still try to refresh the views in case of error
     loadLocalFiles();
     loadAndroidFiles();
+    hideProgressBar();
   } finally {
     state.isTransferring = false;
     clearSelections();

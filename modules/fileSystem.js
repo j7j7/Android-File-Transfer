@@ -197,12 +197,61 @@ async function loadAndroidFiles(state, androidFilesList, androidPathInput, rende
     } else {
       androidFilesList.appendChild(statusBar);
     }
-  } catch (err) {
+  // } catch (err) {
+  //   console.error('Error loading Android files:', err);
+  //   androidFilesList.innerHTML = `<div class="error-message">Error: ${err.message}</div>`;
+  //   setStatus(`Error loading Android files: ${err.message}`);
+  // }
+      } catch (err) {
     console.error('Error loading Android files:', err);
-    androidFilesList.innerHTML = `<div class="error">Error: ${err.message}</div>`;
-    setStatus(`Error loading Android files: ${err.message}`);
+
+    let displayMessage = 'Error loading files from Android device.';
+    let statusType = 'error';
+
+    // Detects specifically the authorization error
+    if (err.message && (
+        err.message.includes('device unauthorized') ||
+        err.message.includes('ADB_VENDOR_KEYS') ||
+        err.message.includes('confirmation dialog on your device')
+    )) {
+      displayMessage = `
+        <div class="error-message">
+          <h3>Unauthorized Android device</h3>
+          <p>The phone was detected, but it has not yet authorized this computer.</p>
+          
+          <div class="adb-help">
+            <h4>How to solve:</h4>
+            <ol>
+              <li>Unlock your phone screen</li>
+              <li>Look for a pop-up window asking:<br>
+                  <strong>"Allow USB debugging?"</strong></li>
+              <li><strong>Check "Always allow from this computer"</strong></li>
+              <li>Tap <strong>OK</strong> or <strong>Allow</strong></li>
+            </ol>
+            <p><strong>Tip:</strong> If it doesn't appear, disconnect and reconnect the USB cable.</p>
+            <p>After authorizing, the files will appear automatically.</p>
+          </div>
+        </div>
+      `;
+
+      setStatus('Waiting for Android device authorization...', 'warning');
+    } else {
+      // Para outros erros
+      displayMessage = `
+        <div class="error-message">
+          <h3>Error loading files</h3>
+          <p>${err.message || 'Unknown error'}</p>
+        </div>
+      `;
+
+      setStatus('Error connecting to Android device', 'error');
+    }
+
+    // Mostra a mensagem bonita no painel Android
+    androidFilesList.innerHTML = displayMessage;
   }
 }
+
 
 /**
  * Handle double-click on file items for navigation
