@@ -23,6 +23,18 @@
   - ZIP package (Android File Transfer-1.0.0-arm64-mac.zip)
 - Note: App is currently unsigned (requires manual security approval)
 
+### Windows Build (x64)
+- Built using electron-builder
+- Uses build/icon.ico for Windows icon (must be valid .ico format, not .bmp)
+- Outputs:
+  - NSIS installer (Android-File-Transfer-Setup-1.0.0.exe) ~84MB
+  - Portable executable (Android-File-Transfer-Portable-1.0.0.exe) ~84MB
+- Icon Configuration Fix (2026-02-21):
+  - Fixed: Changed from iconpicture.bmp to build/icon.ico in package.json
+  - Issue: electron-builder requires .ico format for Windows, not .bmp
+  - build/icon.ico must be a valid icon file (not a placeholder text file)
+- Note: Binaries are unsigned (may trigger Windows Defender warnings)
+
 ## Dependencies
 - electron: ^28.1.0
 - electron-builder: ^24.9.1

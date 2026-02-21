@@ -51,7 +51,7 @@
         "nsis",
         "portable"
       ],
-      "icon": "iconpicture.bmp",
+      "icon": "build/icon.ico",
       "artifactName": "Android-File-Transfer-Setup-${version}.${ext}"
     },
     "extraResources": [
