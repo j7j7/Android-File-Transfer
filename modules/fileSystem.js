@@ -375,9 +375,15 @@ function renderFileList(items, container, isLocal, state, setStatus, pullAndroid
     itemElem.className = `file-item ${isDir ? 'folder-item' : 'file-item'} ${selectedItems.has(name) ? 'selected' : ''}`;
     itemElem.dataset.name = name;
     itemElem.dataset.isDir = isDir ? 'true' : 'false'; // Add a data attribute to store directory status
+    itemElem.dataset.isLocal = isLocal ? 'true' : 'false'; // Track source type for drag/drop
     if (fileType) {
       itemElem.dataset.fileType = fileType;
     }
+    
+    // Make items draggable for drag and drop
+    itemElem.draggable = 'true';
+    itemElem.dataset.sourcePath = isLocal ? path.join(state.localPath, name) : path.join(state.androidPath, name);
+    itemElem.dataset.isItem = 'true'; // Mark as a draggable item (not a button)
     
     let viewButton = '';
     if (!isDir && fileType) {
@@ -468,6 +474,38 @@ function renderFileList(items, container, isLocal, state, setStatus, pullAndroid
      * Handle double-click for folder navigation
      */
     itemElem.addEventListener('dblclick', (e) => handleItemDoubleClick(e, itemElem, isLocal, state, renderFileList, setStatus, pullAndroidFileToTemp, viewFile));
+    
+    /**
+     * Handle drag start event
+     * Initiates drag operation with item data
+     */
+    itemElem.addEventListener('dragstart', (e) => {
+      // Store dragged item data for transfer
+      const name = itemElem.dataset.name;
+      const isDir = itemElem.dataset.isDir === 'true';
+      const isLocal = itemElem.dataset.isLocal === 'true';
+      const sourcePath = itemElem.dataset.sourcePath;
+      
+      // Create drag data
+      e.dataTransfer.effectAllowed = 'copy';
+      e.dataTransfer.setData('text/plain', JSON.stringify({
+        name: name,
+        isDir: isDir,
+        isLocal: isLocal,
+        sourcePath: sourcePath,
+        isItem: true
+      }));
+      
+      // Add dragging class for visual feedback
+      itemElem.classList.add('dragging');
+      
+      console.log(`Dragging ${isLocal ? 'local' : 'Android'} item: ${name}`);
+    });
+    
+    itemElem.addEventListener('dragend', () => {
+      // Remove dragging class when drag ends
+      itemElem.classList.remove('dragging');
+    });
     
     /**
      * Handle view button click for media files

@@ -685,6 +685,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Create the debug container at the bottom
   addDebugContainer();
   
+  // Set up drag and drop for file explorers
+  setupDragAndDrop();
+  
   // Request config information for debug display
   ipcRenderer.invoke('get-config-info').then(configInfo => {
     debugLog(`Config Paths: 
@@ -698,6 +701,192 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   hideProgressBar();
 });
+
+/**
+ * Setup drag and drop functionality for file explorer panels
+ */
+function setupDragAndDrop() {
+  console.log('Setting up drag and drop functionality');
+  
+  const localExplorer = document.getElementById('local-explorer');
+  const androidExplorer = document.getElementById('android-explorer');
+  
+  if (!localExplorer || !androidExplorer) {
+    console.error('Could not find explorer panels for drag and drop setup');
+    return;
+  }
+  
+  // Set up drag over event for both panels
+  [localExplorer, androidExplorer].forEach(explorer => {
+    explorer.addEventListener('dragover', (e) => {
+      e.preventDefault(); // Allow drop
+      e.dataTransfer.dropEffect = 'copy';
+      
+      // Add visual feedback
+      explorer.classList.add('drag-over');
+    });
+    
+    explorer.addEventListener('dragleave', (e) => {
+      // Remove visual feedback when dragging leaves
+      explorer.classList.remove('drag-over');
+    });
+    
+    explorer.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      explorer.classList.remove('drag-over');
+      
+      // Get dropped data
+      const data = e.dataTransfer.getData('text/plain');
+      if (!data) {
+        console.log('No data in drop event');
+        return;
+      }
+      
+      try {
+        const dragData = JSON.parse(data);
+        
+        // Only handle file item drops
+        if (!dragData.isItem) {
+          console.log('Dropped data is not a file item');
+          return;
+        }
+        
+        // Determine source and destination
+        const isFromLocal = dragData.isLocal;
+        const isToLocal = explorer.id === 'local-explorer';
+        
+        // Don't allow dropping on same side
+        if (isFromLocal === isToLocal) {
+          setStatus('Cannot drop items on the same side');
+          return;
+        }
+        
+        console.log(`Drop: ${isFromLocal ? 'local' : 'Android'} → ${isToLocal ? 'local' : 'Android'}`);
+        console.log(`Dropped item: ${dragData.name} (${dragData.isDir ? 'folder' : 'file'})`);
+        
+        // Handle multiple selected items if available
+        const sourceSelectedItems = isFromLocal ? state.localSelectedItems : state.androidSelectedItems;
+        
+        if (sourceSelectedItems.size > 0) {
+          // Transfer only the dragged item
+          await handleDropTransfer([dragData], isFromLocal, isToLocal);
+        } else {
+          // Transfer all selected items
+          const itemsToTransfer = [];
+          
+          sourceSelectedItems.forEach(itemName => {
+            const itemPath = isFromLocal 
+              ? path.join(state.localPath, itemName)
+              : path.join(state.androidPath, itemName);
+            
+            // Get item metadata
+            const isDir = isFromLocal 
+              ? fs.existsSync(itemPath) && fs.statSync(itemPath).isDirectory()
+              : document.querySelector(`[data-name="${itemName}"]`)?.dataset?.isDir === 'true';
+            
+            const fileType = getFileType(itemName);
+            
+            itemsToTransfer.push({
+              name: itemName,
+              isDir: isDir === true,
+              isLocal: isFromLocal,
+              sourcePath: itemPath,
+              isItem: true,
+              fileType: fileType
+            });
+          });
+          
+          console.log(`Transferring ${itemsToTransfer.length} selected items`);
+          await handleDropTransfer(itemsToTransfer, isFromLocal, isToLocal);
+        }
+      } catch (err) {
+        console.error('Error handling drop:', err);
+        setStatus(`Error handling drop: ${err.message}`);
+      }
+    });
+  });
+}
+
+/**
+ * Handle drop transfer for one or multiple items
+ * @param {Array} items - Items to transfer
+ * @param {boolean} isFromLocal - True if transferring from local
+ * @param {boolean} isToLocal - True if transferring to local
+ */
+async function handleDropTransfer(items, isFromLocal, isToLocal) {
+  if (items.length === 0) {
+    return;
+  }
+  
+  setStatus(`Copying ${items.length} item(s) ${isFromLocal ? 'from local' : 'from Android'} ${isToLocal ? 'to local' : 'to Android'}...`);
+  
+  let successCount = 0;
+  let errorCount = 0;
+  
+  for (const item of items) {
+    try {
+      if (isFromLocal && !isToLocal) {
+        // Local to Android
+        if (item.isDir) {
+          // Transfer folder
+          await transferOps.transferFolderToAndroid(
+            item.name,
+            item.sourcePath,
+            state.androidPath,
+            state.selectedDevice
+          );
+          successCount++;
+        } else {
+          // Transfer file
+          await transferOps.transferFileToAndroid(
+            item.name,
+            item.sourcePath,
+            state.androidPath,
+            state.selectedDevice
+          );
+          successCount++;
+        }
+      } else if (!isFromLocal && isToLocal) {
+        // Android to local
+        if (item.isDir) {
+          // Transfer folder
+          await transferOps.pullFolder(
+            item.name,
+            item.sourcePath,
+            state.localPath,
+            state.selectedDevice
+          );
+          successCount++;
+        } else {
+          // Transfer file
+          await transferOps.pullFile(
+            item.name,
+            item.sourcePath,
+            state.localPath,
+            state.selectedDevice
+          );
+          successCount++;
+        }
+      }
+      
+      console.log(`Transferred: ${item.name} (${item.isDir ? 'folder' : 'file'})`);
+    } catch (err) {
+      console.error(`Error transferring ${item.name}:`, err);
+      errorCount++;
+    }
+  }
+  
+  // Force small delay to ensure file system operations complete
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  // Clear selections and refresh both views
+  clearSelections();
+  await loadLocalFiles();
+  await loadAndroidFiles();
+  
+  setStatus(`Copy complete. Success: ${successCount}, Errors: ${errorCount}`, 'success');
+  debugLog(`Drop transfer complete. Success: ${successCount}, Errors: ${errorCount}`);
+}
 
 /**
  * Load local files from the file system

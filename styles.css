@@ -568,6 +568,41 @@ main {
 }
 
 /* ======================================
+   Drag and Drop Styles
+   ====================================== */
+.file-item[draggable="true"] {
+  cursor: move;
+}
+
+.file-item.dragging {
+  opacity: 0.5;
+  background-color: var(--file-item-hover);
+}
+
+.file-explorer.drag-over {
+  background-color: var(--file-item-selected);
+  border: 2px dashed var(--accent-primary);
+}
+
+.file-explorer.drag-over::after {
+  content: 'Drop here to copy';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 14px;
+  color: var(--accent-primary);
+  font-weight: bold;
+  pointer-events: none;
+}
+
+/* Hide the drop message when items are being dragged */
+.file-explorer.drag-over .file-list {
+  pointer-events: none;
+}
+
+
+/* ======================================
    Action buttons and transfer controls
    ====================================== */
 .actions {
