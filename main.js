@@ -679,22 +679,34 @@ function checkAdbServer() {
  * @param {string} params.path - Directory path to list files from
  * @returns {Array} List of files and directories
  */
-ipcMain.handle('list-files', async (event, { deviceId, path: dirPath }) => {
+ipcMain.handle('list-files', async (event, { deviceId, path: dirPath, noCache }) => {
   try {
     console.log('Main process: Listing files at path:', dirPath);
     console.log('Main process: For device:', deviceId);
+    console.log('Main process: Force refresh (noCache):', noCache ? 'Yes' : 'No');
     
     // Normalize path for Android - ensure no Windows-style backslashes
     let normalizedPath = dirPath.replace(/\\/g, '/');
     console.log('Main process: Normalized path:', normalizedPath);
     
     // Make sure we're using a valid Android path
-    // If the path doesn't start with / or /sdcard, fix it
+    // If path doesn't start with / or /sdcard, fix it
     if (!normalizedPath.startsWith('/')) {
       normalizedPath = '/' + normalizedPath;
     }
     
     console.log('Main process: Final path to use:', normalizedPath);
+    
+    // Force ADB client to refresh by syncing before listing
+    if (noCache && client) {
+      try {
+        console.log('Main process: Force syncing device to ensure fresh data');
+        await client.sync(deviceId, normalizedPath, { recursive: false });
+      } catch (syncErr) {
+        console.warn('Main process: Sync failed (non-critical):', syncErr.message);
+        // Continue even if sync fails
+      }
+    }
     
     // Skip the shell command verification since it's causing issues
     // Go directly to readdir
@@ -714,7 +726,7 @@ ipcMain.handle('list-files', async (event, { deviceId, path: dirPath }) => {
       console.error(`Main process: Error accessing path ${normalizedPath}:`, innerErr.message);
       console.error('Main process: Error stack:', innerErr.stack);
       
-      // Fallback mechanism: If the original path is not /sdcard, try prepending /sdcard/
+      // Fallback mechanism: If original path is not /sdcard, try prepending /sdcard/
       // This helps handle different Android storage path configurations
       if (normalizedPath !== '/sdcard' && !normalizedPath.startsWith('/sdcard/')) {
         try {
@@ -736,7 +748,7 @@ ipcMain.handle('list-files', async (event, { deviceId, path: dirPath }) => {
     console.error(`Failed to list files at ${dirPath}:`, err.message);
     console.error('Error name:', err.name);
     console.error('Error message:', err.message);
-    throw err; // Make sure the error is propagated to the renderer
+    throw err; // Make sure error is propagated to renderer
   }
 });
 
@@ -1001,6 +1013,32 @@ ipcMain.handle('delete-item', async (event, { deviceId, path, isDirectory }) => 
     return { success: true };
   } catch (err) {
     console.error(`Failed to delete ${path}:`, err);
+    return { success: false, error: err.message };
+  }
+});
+
+/**
+ * IPC Handler: Rename Android file/folder
+ * 
+ * @param {Object} event - IPC event object
+ * @param {Object} params - Parameters
+ * @param {string} params.deviceId - Android device ID
+ * @param {string} params.oldPath - Current path of the item
+ * @param {string} params.newPath - New path for the item
+ * @returns {Object} Result with success flag and optional error
+ */
+ipcMain.handle('rename-android-item', async (event, { deviceId, oldPath, newPath }) => {
+  try {
+    console.log(`Renaming Android item from ${oldPath} to ${newPath}`);
+    
+    // Use ADB shell to rename the item using 'mv' command
+    const cmd = `mv "${oldPath}" "${newPath}"`;
+    await client.shell(deviceId, cmd);
+    
+    console.log(`Successfully renamed ${oldPath} to ${newPath}`);
+    return { success: true };
+  } catch (err) {
+    console.error(`Failed to rename ${oldPath}:`, err);
     return { success: false, error: err.message };
   }
 });

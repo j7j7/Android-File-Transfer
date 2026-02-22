@@ -18,6 +18,44 @@
   <title>Android File Transfer</title>
   <link rel="stylesheet" href="styles.css">
   <style>
+    :root {
+      --bg-primary: #f5f5f7;
+      --bg-secondary: #ffffff;
+      --bg-tertiary: #f0f4f8;
+      --text-primary: #333;
+      --text-secondary: #64748b;
+      --text-muted: #666;
+      --border-color: #e2e8f0;
+      --border-color-light: #cbd5e1;
+      --accent-secondary: #0071e3;
+      --accent-secondary-hover: #0062c4;
+      --modal-overlay: rgba(0, 0, 0, 0.5);
+      --modal-bg: #ffffff;
+      --modal-text: #333;
+      --input-bg: #ffffff;
+      --input-border: #cbd5e1;
+      --input-text: #333;
+    }
+
+    :root[data-theme="dark"] {
+      --bg-primary: #1a1a1a;
+      --bg-secondary: #2d2d2d;
+      --bg-tertiary: #252525;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --text-muted: #8b949e;
+      --border-color: #30363d;
+      --border-color-light: #484f58;
+      --accent-secondary: #58a6ff;
+      --accent-secondary-hover: #1f6feb;
+      --modal-overlay: rgba(0, 0, 0, 0.7);
+      --modal-bg: #2d2d2d;
+      --modal-text: #e6edf3;
+      --input-bg: #2d2d2d;
+      --input-border: #484f58;
+      --input-text: #e6edf3;
+    }
+
     /* Add styles for the custom modal dialog */
     #custom-modal-container {
       position: fixed;
@@ -25,7 +63,7 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background-color: rgba(0, 0, 0, 0.5);
+      background-color: var(--modal-overlay);
       display: flex;
       justify-content: center;
       align-items: center;
@@ -33,7 +71,8 @@
     }
     
     #custom-modal-container .modal-content {
-      background-color: white;
+      background-color: var(--modal-bg);
+      color: var(--modal-text);
       border-radius: 5px;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
       padding: 20px;
@@ -49,7 +88,7 @@
     #custom-modal-container .path-display {
       margin-bottom: 10px;
       font-size: 12px;
-      color: #666;
+      color: var(--text-muted);
       word-break: break-all;
     }
     
@@ -66,8 +105,10 @@
       width: 100%;
       padding: 8px;
       box-sizing: border-box;
-      border: 1px solid #ccc;
+      border: 1px solid var(--input-border);
       border-radius: 4px;
+      background-color: var(--input-bg);
+      color: var(--input-text);
     }
     
     #custom-modal-container .button-group {
@@ -84,16 +125,17 @@
     }
     
     #custom-modal-container .cancel-btn {
-      background-color: #f1f1f1;
+      background-color: var(--bg-tertiary);
+      color: var(--text-primary);
     }
     
     #custom-modal-container .create-btn {
-      background-color: #007bff;
+      background-color: var(--accent-secondary);
       color: white;
     }
     
     #custom-modal-container .error-message {
-      color: red;
+      color: var(--accent-danger);
       margin-bottom: 10px;
     }
   </style>
@@ -102,6 +144,7 @@
   <header class="app-header">
     <h1>Android File Transfer</h1>
     <div class="device-controls">
+      <button id="theme-toggle" title="Toggle dark/light mode">🌓</button>
       <select id="device-select">
         <option value="">Select a device</option>
       </select>
@@ -125,6 +168,7 @@
         </div>
         <div class="file-operations">
           <button id="local-new-folder" class="new-folder-button">New Folder</button>
+          <button id="local-rename" class="rename-button">Rename</button>
           <button id="local-delete" class="delete-button">Delete</button>
           <button id="local-refresh" class="refresh-button">↻</button>
         </div>
@@ -152,6 +196,7 @@
         </div>
         <div class="file-operations">
           <button id="android-new-folder" class="new-folder-button">New Folder</button>
+          <button id="android-rename" class="rename-button">Rename</button>
           <button id="android-delete" class="delete-button">Delete</button>
           <button id="android-refresh" class="refresh-button">↻</button>
         </div>

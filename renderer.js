@@ -50,6 +50,8 @@ const transferToLocalBtn = document.getElementById('transfer-to-local');
 const swapSidesBtn = document.getElementById('swap-sides');
 const localNewFolderBtn = document.getElementById('local-new-folder');
 const androidNewFolderBtn = document.getElementById('android-new-folder');
+const localRenameBtn = document.getElementById('local-rename');
+const androidRenameBtn = document.getElementById('android-rename');
 const localDeleteBtn = document.getElementById('local-delete');
 const androidDeleteBtn = document.getElementById('android-delete');
 const statusMessage = document.getElementById('status-message');
@@ -361,11 +363,14 @@ ipcRenderer.on('transfer-progress', (event, data) => {
   updateProgressBar(percent, percent > 0 ? `${percent}%` : '');
 
   if (completed) {
-    setTimeout(() => {
+    setTimeout(async () => {
       hideProgressBar();
       setStatus(`Done: ${file}`);
-      loadAndroidFiles();
-      loadLocalFiles();
+      // Force a small delay to ensure file system has completed
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await loadAndroidFiles();
+      await loadLocalFiles();
+      setStatus('Transfer complete - Files refreshed', 'success');
     }, 800);
   }
 });
@@ -495,10 +500,51 @@ function resetAdbConfiguration() {
 }
 
 /**
+ * Theme Management Functions
+ * Handles dark/light mode toggle
+ */
+
+function toggleTheme() {
+  const html = document.documentElement;
+  const currentTheme = html.getAttribute('data-theme');
+  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  
+  html.setAttribute('data-theme', newTheme);
+  localStorage.setItem('theme', newTheme);
+  
+  setStatus(`Switched to ${newTheme} mode`, 'success');
+  debugLog(`Theme changed to ${newTheme}`);
+}
+
+function initializeTheme() {
+  const savedTheme = localStorage.getItem('theme');
+  const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  
+  let initialTheme = 'light';
+  
+  if (savedTheme) {
+    initialTheme = savedTheme;
+  } else if (systemPrefersDark) {
+    initialTheme = 'dark';
+  }
+  
+  document.documentElement.setAttribute('data-theme', initialTheme);
+  debugLog(`Theme initialized: ${initialTheme}`);
+}
+
+/**
  * Document Ready Handler
  * Set up the initial state and event listeners when the DOM content is loaded
  */
 document.addEventListener('DOMContentLoaded', async () => {
+  // Initialize theme
+  initializeTheme();
+  
+  // Set up theme toggle button
+  const themeToggleBtn = document.getElementById('theme-toggle');
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', toggleTheme);
+  }
   // Update platform-specific elements 
   document.documentElement.classList.toggle('windows', isWindows);
   document.documentElement.classList.toggle('mac', isMac);
@@ -870,13 +916,13 @@ async function refreshDevices() {
  * Device selection change handler
  * Updates the selected device and loads Android files
  */
-deviceSelect.addEventListener('change', (e) => {
+deviceSelect.addEventListener('change', async (e) => {
   console.log('Device selection changed:', e.target.value);
   state.selectedDevice = e.target.value;
   
   if (state.selectedDevice) {
     setStatus(`Selected device: ${state.selectedDevice}`);
-    loadAndroidFiles();
+    await loadAndroidFiles();
   } else {
     setStatus('No device selected');
     androidFilesList.innerHTML = '<div class="placeholder">Select a device to view files</div>';
@@ -887,11 +933,11 @@ deviceSelect.addEventListener('change', (e) => {
  * Local back button click handler
  * Navigates up one level in the local file system
  */
-localBackBtn.addEventListener('click', (e) => {
+localBackBtn.addEventListener('click', async (e) => {
   console.log('Local back button clicked');
   state.localPath = localFS.navigateUp(state.localPath);
   localPathInput.value = state.localPath;
-  loadLocalFiles();
+  await loadLocalFiles();
   clearSelections();
 });
 
@@ -899,7 +945,7 @@ localBackBtn.addEventListener('click', (e) => {
  * Android back button click handler
  * Navigates up one level in the Android file system
  */
-androidBackBtn.addEventListener('click', (e) => {
+androidBackBtn.addEventListener('click', async (e) => {
   console.log('Android back button clicked');
   
   // Get the parent directory path for Android (using / as separator)
@@ -912,7 +958,7 @@ androidBackBtn.addEventListener('click', (e) => {
   }
   
   androidPathInput.value = state.androidPath;
-  loadAndroidFiles();
+  await loadAndroidFiles();
   clearSelections();
 });
 
@@ -920,14 +966,14 @@ androidBackBtn.addEventListener('click', (e) => {
  * Local path input enter key handler
  * Navigates to the entered path in the local file system
  */
-localPathInput.addEventListener('keyup', (e) => {
+localPathInput.addEventListener('keyup', async (e) => {
   if (e.key === 'Enter') {
     console.log('Local path enter pressed:', e.target.value);
     const newPath = e.target.value.trim();
     
     if (fs.existsSync(newPath) && fs.statSync(newPath).isDirectory()) {
       state.localPath = newPath;
-      loadLocalFiles();
+      await loadLocalFiles();
     } else {
       setStatus(`Invalid path: ${newPath}`);
       e.target.value = state.localPath;
@@ -939,13 +985,13 @@ localPathInput.addEventListener('keyup', (e) => {
  * Local go button click handler
  * Navigates to the entered path in the local file system
  */
-localGoBtn.addEventListener('click', (e) => {
+localGoBtn.addEventListener('click', async (e) => {
   console.log('Local go button clicked');
   const newPath = localPathInput.value.trim();
   
   if (fs.existsSync(newPath) && fs.statSync(newPath).isDirectory()) {
     state.localPath = newPath;
-    loadLocalFiles();
+    await loadLocalFiles();
   } else {
     setStatus(`Invalid path: ${newPath}`);
     localPathInput.value = state.localPath;
@@ -956,7 +1002,7 @@ localGoBtn.addEventListener('click', (e) => {
  * Android path input enter key handler
  * Navigates to the entered path in the Android file system
  */
-androidPathInput.addEventListener('keyup', (e) => {
+androidPathInput.addEventListener('keyup', async (e) => {
   if (e.key === 'Enter') {
     console.log('Android path enter pressed:', e.target.value);
     
@@ -967,7 +1013,7 @@ androidPathInput.addEventListener('keyup', (e) => {
     
     const newPath = e.target.value.trim();
     state.androidPath = newPath;
-    loadAndroidFiles();
+    await loadAndroidFiles();
   }
 });
 
@@ -1088,18 +1134,21 @@ transferToAndroidBtn.addEventListener('click', async (e) => {
     setStatus(`Transfer complete. Success: ${successCount}, Errors: ${errorCount}`);
     hideProgressBar();
     
+    // Force a small delay to ensure file system has completed
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     // Directly refresh both views like the Go button does
-    loadLocalFiles();
-    loadAndroidFiles();
-    setStatus('Transfer completed and views refreshed', 'success');
+    await loadLocalFiles();
+    await loadAndroidFiles();
+    setStatus('Transfer completed - Files refreshed', 'success');
     hideProgressBar();
   } catch (err) {
     console.error('Error during transfer to Android:', err);
     setStatus(`Transfer error: ${err.message}`);
     
     // Still try to refresh the views in case of error
-    loadLocalFiles();
-    loadAndroidFiles();
+    await loadLocalFiles();
+    await loadAndroidFiles();
     hideProgressBar();
   } finally {
     state.isTransferring = false;
@@ -1215,18 +1264,21 @@ transferToLocalBtn.addEventListener('click', async (e) => {
     updateProgressBar(100, 'Complete');
     setStatus(`Transfer complete. Success: ${successCount}, Errors: ${errorCount}`);
     
+    // Force a small delay to ensure file system has completed
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     // Directly refresh both views like the Go button does
-    loadLocalFiles();
-    loadAndroidFiles();
-    setStatus('Transfer completed and views refreshed', 'success');
+    await loadLocalFiles();
+    await loadAndroidFiles();
+    setStatus('Transfer completed - Files refreshed', 'success');
     hideProgressBar();
   } catch (err) {
     console.error('Error during transfer to local:', err);
     setStatus(`Transfer error: ${err.message}`);
     
     // Still try to refresh the views in case of error
-    loadLocalFiles();
-    loadAndroidFiles();
+    await loadLocalFiles();
+    await loadAndroidFiles();
     hideProgressBar();
   } finally {
     state.isTransferring = false;
@@ -1335,6 +1387,333 @@ androidNewFolderBtn.addEventListener('click', async (e) => {
 });
 
 /**
+ * Local rename button click handler
+ * Renames selected local file/folder
+ */
+localRenameBtn.addEventListener('click', async (e) => {
+  console.log('Local rename button clicked');
+  
+  if (state.localSelectedItems.size === 0) {
+    setStatus('No item selected for renaming', 'warning');
+    return;
+  }
+  
+  if (state.localSelectedItems.size > 1) {
+    setStatus('Please select only one item to rename', 'warning');
+    return;
+  }
+  
+  const itemName = Array.from(state.localSelectedItems)[0];
+  const result = await uiOps.renameItem(itemName, state.localPath, false);
+  
+  if (result) {
+    await performLocalRename(result.oldName, result.newName, state.localPath);
+  }
+});
+
+/**
+ * Android rename button click handler
+ * Renames selected Android file/folder
+ */
+androidRenameBtn.addEventListener('click', async (e) => {
+  console.log('Android rename button clicked');
+  
+  if (!state.selectedDevice) {
+    setStatus('No device selected');
+    return;
+  }
+  
+  if (state.androidSelectedItems.size === 0) {
+    setStatus('No item selected for renaming', 'warning');
+    return;
+  }
+  
+  if (state.androidSelectedItems.size > 1) {
+    setStatus('Please select only one item to rename', 'warning');
+    return;
+  }
+  
+  const itemName = Array.from(state.androidSelectedItems)[0];
+  const result = await uiOps.renameItem(itemName, state.androidPath, true);
+  
+  if (result) {
+    await performAndroidRename(result.oldName, result.newName, state.androidPath);
+  }
+});
+
+/**
+ * Perform local file/folder rename
+ * @param {string} oldName - Current name
+ * @param {string} newName - New name
+ * @param {string} currentPath - Current path
+ */
+async function performLocalRename(oldName, newName, currentPath) {
+  const oldPath = path.join(currentPath, oldName);
+  const newPath = path.join(currentPath, newName);
+  
+  setStatus(`Renaming "${oldName}" to "${newName}"...`);
+  
+  // Check if new name already exists
+  if (fs.existsSync(newPath)) {
+    throw new Error('An item with this name already exists');
+  }
+  
+  // Perform rename
+  fs.renameSync(oldPath, newPath);
+  
+  setStatus(`Renamed "${oldName}" to "${newName}"`, 'success');
+  debugLog(`Renamed ${oldPath} to ${newPath}`);
+  
+  // Clear selections
+  clearSelections();
+  
+  // Force a small delay to ensure file system has completed to operation
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  // Refresh file list with a fresh read
+  await loadLocalFiles();
+  
+  setStatus(`Renamed "${oldName}" to "${newName}" - Files refreshed`, 'success');
+}
+
+/**
+ * Perform Android file/folder rename
+ * @param {string} oldName - Current name
+ * @param {string} newName - New name
+ * @param {string} currentPath - Current path
+ */
+async function performAndroidRename(oldName, newName, currentPath) {
+  if (!state.selectedDevice) {
+    throw new Error('No device selected');
+  }
+  
+  const oldPath = path.join(currentPath, oldName).replace(/\\/g, '/');
+  const newPath = path.join(currentPath, newName).replace(/\\/g, '/');
+  
+  setStatus(`Renaming "${oldName}" to "${newName}"...`);
+  
+  try {
+    // Use ADB to rename to file/folder
+    const result = await ipcRenderer.invoke('rename-android-item', {
+      deviceId: state.selectedDevice,
+      oldPath: oldPath,
+      newPath: newPath
+    });
+    
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to rename item');
+    }
+    
+    setStatus(`Renamed "${oldName}" to "${newName}"`, 'success');
+    debugLog(`Renamed Android ${oldPath} to ${newPath}`);
+    
+    // Clear selections
+    clearSelections();
+    
+    // Force a small delay to ensure ADB has completed to operation
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // Refresh file list with a fresh read
+    await loadAndroidFiles();
+    
+    setStatus(`Renamed "${oldName}" to "${newName}" - Files refreshed`, 'success');
+  } catch (err) {
+    console.error('Error renaming Android item:', err);
+    throw new Error(err.message || 'Failed to rename item');
+  }
+}
+
+/**
+ * Local delete button click handler
+ * Deletes selected items from the local file system
+ */
+androidRenameBtn.addEventListener('click', async (e) => {
+  console.log('Android rename button clicked');
+  
+  if (!state.selectedDevice) {
+    setStatus('No device selected');
+    return;
+  }
+  
+  if (state.androidSelectedItems.size === 0) {
+    setStatus('No item selected for renaming', 'warning');
+    return;
+  }
+  
+  if (state.androidSelectedItems.size > 1) {
+    setStatus('Please select only one item to rename', 'warning');
+    return;
+  }
+  
+  const itemName = Array.from(state.androidSelectedItems)[0];
+  showRenameDialog(itemName, state.androidPath, true);
+});
+
+/**
+ * Show rename dialog
+ * @param {string} itemName - Current name of the item
+ * @param {string} currentPath - Current path of the item
+ * @param {boolean} isAndroid - Whether this is an Android item
+ */
+function showRenameDialog(itemName, currentPath, isAndroid) {
+  const renameModal = document.getElementById('rename-modal-container');
+  const renameInput = document.getElementById('rename-input');
+  const renamePathDisplay = document.getElementById('rename-path-display');
+  const renameError = document.getElementById('rename-error');
+  
+  // Set up the dialog
+  renamePathDisplay.textContent = `${isAndroid ? 'Android' : 'Local'}: ${path.join(currentPath, itemName)}`;
+  renameInput.value = itemName;
+  renameError.textContent = '';
+  renameError.style.display = 'none';
+  
+  // Show the modal
+  renameModal.style.display = 'flex';
+  renameInput.focus();
+  renameInput.select();
+  
+  // Remove old event listeners
+  const newConfirmBtn = document.getElementById('rename-confirm');
+  const newConfirm = newConfirmBtn.cloneNode(true);
+  newConfirmBtn.parentNode.replaceChild(newConfirm, newConfirmBtn);
+  
+  const newCancelBtn = document.getElementById('rename-cancel');
+  const newCancel = newCancelBtn.cloneNode(true);
+  newCancelBtn.parentNode.replaceChild(newCancel, newCancelBtn);
+  
+  // Add new event listeners
+  newConfirm.addEventListener('click', async () => {
+    const newName = renameInput.value.trim();
+    
+    if (!newName) {
+      renameError.textContent = 'Name cannot be empty';
+      renameError.style.display = 'block';
+      return;
+    }
+    
+    if (newName === itemName) {
+      renameError.textContent = 'New name must be different from current name';
+      renameError.style.display = 'block';
+      return;
+    }
+    
+    try {
+      if (isAndroid) {
+        await performAndroidRename(itemName, newName, currentPath);
+      } else {
+        await performLocalRename(itemName, newName, currentPath);
+      }
+      
+      // Hide the modal
+      renameModal.style.display = 'none';
+    } catch (err) {
+      renameError.textContent = `Error: ${err.message}`;
+      renameError.style.display = 'block';
+    }
+  });
+  
+  newCancel.addEventListener('click', () => {
+    renameModal.style.display = 'none';
+  });
+  
+  // Handle Enter key
+  renameInput.addEventListener('keyup', (e) => {
+    if (e.key === 'Enter') {
+      newConfirm.click();
+    }
+  });
+  
+  // Handle Escape key
+  renameInput.addEventListener('keyup', (e) => {
+    if (e.key === 'Escape') {
+      newCancel.click();
+    }
+  });
+}
+
+/**
+ * Perform local file/folder rename
+ * @param {string} oldName - Current name
+ * @param {string} newName - New name
+ * @param {string} currentPath - Current path
+ */
+async function performLocalRename(oldName, newName, currentPath) {
+  const oldPath = path.join(currentPath, oldName);
+  const newPath = path.join(currentPath, newName);
+  
+  setStatus(`Renaming "${oldName}" to "${newName}"...`);
+  
+  // Check if new name already exists
+  if (fs.existsSync(newPath)) {
+    throw new Error('An item with this name already exists');
+  }
+  
+  // Perform the rename
+  fs.renameSync(oldPath, newPath);
+  
+  setStatus(`Renamed "${oldName}" to "${newName}"`, 'success');
+  debugLog(`Renamed ${oldPath} to ${newPath}`);
+  
+  // Clear selections
+  clearSelections();
+  
+  // Force a small delay to ensure file system has completed the operation
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  // Refresh the file list with a fresh read
+  await loadLocalFiles();
+  
+  setStatus(`Renamed "${oldName}" to "${newName}" - Files refreshed`, 'success');
+}
+
+/**
+ * Perform Android file/folder rename
+ * @param {string} oldName - Current name
+ * @param {string} newName - New name
+ * @param {string} currentPath - Current path
+ */
+async function performAndroidRename(oldName, newName, currentPath) {
+  if (!state.selectedDevice) {
+    throw new Error('No device selected');
+  }
+  
+  const oldPath = path.join(currentPath, oldName).replace(/\\/g, '/');
+  const newPath = path.join(currentPath, newName).replace(/\\/g, '/');
+  
+  setStatus(`Renaming "${oldName}" to "${newName}"...`);
+  
+  try {
+    // Use ADB to rename the file/folder
+    const result = await ipcRenderer.invoke('rename-android-item', {
+      deviceId: state.selectedDevice,
+      oldPath: oldPath,
+      newPath: newPath
+    });
+    
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to rename item');
+    }
+    
+    setStatus(`Renamed "${oldName}" to "${newName}"`, 'success');
+    debugLog(`Renamed Android ${oldPath} to ${newPath}`);
+    
+    // Clear selections
+    clearSelections();
+    
+    // Force a small delay to ensure ADB has completed the operation
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // Refresh the file list with a fresh read
+    await loadAndroidFiles();
+    
+    setStatus(`Renamed "${oldName}" to "${newName}" - Files refreshed`, 'success');
+  } catch (err) {
+    console.error('Error renaming Android item:', err);
+    throw new Error(err.message || 'Failed to rename item');
+  }
+}
+
+/**
  * Local delete button click handler
  * Deletes selected items from the local file system
  */
@@ -1375,8 +1754,12 @@ localDeleteBtn.addEventListener('click', async (e) => {
   // Provide feedback
   setStatus(`Deleted ${successCount} item(s). Errors: ${errorCount}.`);
   
-  // Directly call loadLocalFiles for immediate refresh, just like the Go button
-  loadLocalFiles();
+  // Force a small delay to ensure file system has completed the deletions
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  // Directly call loadLocalFiles for immediate refresh
+  await loadLocalFiles();
+  setStatus('Local files refreshed', 'success');
 });
 
 /**
@@ -1451,8 +1834,12 @@ androidDeleteBtn.addEventListener('click', async (e) => {
   // Provide feedback
   setStatus(`Deleted ${successCount} item(s). Errors: ${errorCount}.`);
   
-  // Directly call loadAndroidFiles for immediate refresh, just like the Go button
-  loadAndroidFiles();
+  // Force a small delay to ensure ADB has completed the deletions
+  await new Promise(resolve => setTimeout(resolve, 300));
+  
+  // Directly call loadAndroidFiles for immediate refresh
+  await loadAndroidFiles();
+  setStatus('Android files refreshed', 'success');
 });
 
 // Set up event listeners for buttons
@@ -1594,8 +1981,11 @@ async function refreshLocalFiles() {
   debugLog('Refreshing local files using direct loadLocalFiles call');
   setStatus('Refreshing local files...');
   
-  // Call loadLocalFiles directly, just like the Go button does
-  loadLocalFiles();
+  // Force a small delay to ensure any pending file system operations complete
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  // Call loadLocalFiles directly, just like the Go button does (await to ensure refresh completes)
+  await loadLocalFiles();
   
   setStatus('Local files refreshed');
 }
@@ -1612,8 +2002,11 @@ async function refreshAndroidFiles() {
   debugLog('Refreshing Android files using direct loadAndroidFiles call');
   setStatus('Refreshing Android files...');
   
-  // Call loadAndroidFiles directly, just like the Go button does
-  loadAndroidFiles();
+  // Force a small delay to ensure any pending ADB operations complete
+  await new Promise(resolve => setTimeout(resolve, 200));
+  
+  // Call loadAndroidFiles directly, just like the Go button does (await to ensure refresh completes)
+  await loadAndroidFiles();
   
   setStatus('Android files refreshed');
 } 

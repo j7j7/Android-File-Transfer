@@ -353,10 +353,170 @@ async function createNewFolder(currentPath, isAndroid, deviceId, refreshFunction
   });
 }
 
+/**
+ * Show rename item dialog
+ * 
+ * @param {string} itemName - Current name of the item
+ * @param {string} currentPath - Current path of the item
+ * @param {boolean} isAndroid - Whether this is an Android item
+ * @returns {Promise<Object>} - Promise that resolves with {oldName, newName} or rejects
+ */
+async function renameItem(itemName, currentPath, isAndroid, deviceRenameFunction) {
+  return new Promise((resolve, reject) => {
+    // Create a modal container if it doesn't exist
+    let modalContainer = document.getElementById('custom-modal-container');
+    if (!modalContainer) {
+      modalContainer = document.createElement('div');
+      modalContainer.id = 'custom-modal-container';
+      document.body.appendChild(modalContainer);
+    } else {
+      modalContainer.innerHTML = ''; // Clear any existing content
+    }
+
+    // Create modal content
+    const modalContent = document.createElement('div');
+    modalContent.className = 'modal-content';
+
+    // Create title
+    const title = document.createElement('h3');
+    title.textContent = `Rename ${isAndroid ? 'Android' : 'Local'} Item`;
+
+    // Create path display
+    const pathDisplay = document.createElement('div');
+    pathDisplay.className = 'path-display';
+    pathDisplay.textContent = `Current Path: ${path.join(currentPath, itemName)}`;
+
+    // Create input group
+    const inputGroup = document.createElement('div');
+    inputGroup.className = 'input-group';
+
+    // Create label
+    const label = document.createElement('label');
+    label.textContent = 'New Name:';
+
+    // Create input
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = itemName;
+
+    // Create button group
+    const buttonGroup = document.createElement('div');
+    buttonGroup.className = 'button-group';
+
+    // Create cancel button
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'cancel-btn';
+    cancelButton.textContent = 'Cancel';
+
+    // Create rename button
+    const renameButton = document.createElement('button');
+    renameButton.className = 'create-btn';
+    renameButton.textContent = 'Rename';
+
+    // Add elements to the DOM
+    inputGroup.appendChild(label);
+    inputGroup.appendChild(input);
+    buttonGroup.appendChild(cancelButton);
+    buttonGroup.appendChild(renameButton);
+
+    modalContent.appendChild(title);
+    modalContent.appendChild(pathDisplay);
+    modalContent.appendChild(inputGroup);
+    modalContent.appendChild(buttonGroup);
+
+    modalContainer.appendChild(modalContent);
+
+    // Focus on input and select the text
+    setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 0);
+
+    // Handle cancel button click
+    cancelButton.addEventListener('click', () => {
+      document.body.removeChild(modalContainer);
+      resolve(false);
+    });
+
+    // Handle rename button click
+    renameButton.addEventListener('click', async () => {
+      const newName = input.value.trim();
+
+      if (!newName) {
+        // Show error message for empty name
+        const errorMsg = document.createElement('div');
+        errorMsg.className = 'error-message';
+        errorMsg.textContent = 'Please enter a name';
+
+        // Remove any existing error message
+        const existingError = modalContent.querySelector('.error-message');
+        if (existingError) {
+          existingError.remove();
+        }
+
+        inputGroup.appendChild(errorMsg);
+        return;
+      }
+
+      if (newName === itemName) {
+        // Show error message for same name
+        const errorMsg = document.createElement('div');
+        errorMsg.className = 'error-message';
+        errorMsg.textContent = 'New name must be different from the current name';
+
+        // Remove any existing error message
+        const existingError = modalContent.querySelector('.error-message');
+        if (existingError) {
+          existingError.remove();
+        }
+
+        inputGroup.appendChild(errorMsg);
+        return;
+      }
+
+      try {
+        // Close the modal
+        document.body.removeChild(modalContainer);
+
+        // Resolve with the old and new names
+        resolve({
+          oldName: itemName,
+          newName: newName
+        });
+      } catch (err) {
+        console.error('Error preparing rename:', err);
+
+        // Show error message
+        const errorMsg = document.createElement('div');
+        errorMsg.className = 'error-message';
+        errorMsg.textContent = `Error: ${err.message}`;
+
+        // Remove any existing error message
+        const existingError = modalContent.querySelector('.error-message');
+        if (existingError) {
+          existingError.remove();
+        }
+
+        inputGroup.appendChild(errorMsg);
+      }
+    });
+
+    // Handle Enter key in input
+    input.addEventListener('keyup', (e) => {
+      if (e.key === 'Enter') {
+        renameButton.click();
+      } else if (e.key === 'Escape') {
+        cancelButton.click();
+      }
+    });
+  });
+}
+
 // Export functions
 module.exports = {
   setStatus,
   showConfirmationDialog,
   viewFile,
-  createNewFolder
+  createNewFolder,
+  renameItem
 }; 
