@@ -52,8 +52,13 @@
         "nsis",
         "portable"
       ],
-      "icon": "build/icon.ico",
-      "artifactName": "Android-File-Transfer-${version}.${ext}"
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "artifactName": "Android-File-Transfer-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Android-File-Transfer-Portable-${version}.${ext}"
     },
     "dmg": {
       "contents": [
