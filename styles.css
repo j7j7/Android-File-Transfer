@@ -596,9 +596,12 @@ main {
   pointer-events: none;
 }
 
-/* Hide the drop message when items are being dragged */
-.file-explorer.drag-over .file-list {
-  pointer-events: none;
+/* Allow drops to reach folder items for target detection */
+
+.folder-item.drop-target {
+  background-color: var(--file-item-selected);
+  outline: 2px dashed var(--accent-primary);
+  outline-offset: -2px;
 }
 
 

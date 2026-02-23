@@ -1,8 +1,29 @@
 # Android File Transfer
-Version 1.1 - 03/04/2025
-Created by J7 
+Version: 1.4.0 - 23/02/2026
+Written by Jason Severn
 
 A cross-platform application for transferring files between your computer and Android devices without requiring cloud storage or additional software on your Android device. Works on both macOS and Windows.
+
+## Changelog
+
+### Version 1.4.0 (February 23, 2026)
+**New Features:**
+- ✨ **Dark/Light Mode Toggle**: Full dark mode support across all UI elements (headers, panels, modals, dialogs)
+- ✏️ **File/Folder Rename**: Dynamic popup modal for renaming files and folders on both local and Android systems
+- 🔄 **Auto-Refresh**: Automatic UI and data refresh after all operations (rename, delete, copy, move)
+- 🎯 **Drag & Drop Support**: 
+  - Drag items from local → Android or Android → local (copy operation, not move)
+  - Multi-select support for batch transfers
+  - Visual feedback with drag-over states
+- 🎨 **Enhanced UI**: Improved visual feedback for all user interactions
+- 🔐 **macOS Code Signing**: Signed with Apple Developer certificate for distribution
+
+**Improvements:**
+- Fixed all file operations to properly refresh UI with fresh data
+- Optimized CSS variables for consistent theming
+- Enhanced error handling and user feedback
+
+---
 
 ## Features
 
@@ -13,6 +34,7 @@ A cross-platform application for transferring files between your computer and An
 - **File Operations**: Create folders, delete files, and navigate through directories on both systems
 - **No Android App Required**: Works directly with Android's USB debugging
 - **Platform-Specific Optimizations**: Native drive selection for Windows, streamlined macOS experience
+- **About Information**: Access author and GitHub repository information via Help > About menu
 
 ![image](https://github.com/user-attachments/assets/df274172-bf53-44a8-97a3-cbf8f7339484)
 
@@ -28,13 +50,13 @@ A cross-platform application for transferring files between your computer and An
 ## Installation
 
 ### macOS
-1. Download the latest release from the [Releases](https://github.com/j7j7/android-file-transfer/releases) page
+1. Download the latest release from the [Releases](https://github.com/j7j7/Android-File-Transfer/releases) page
 2. Mount the DMG file
 3. Drag the application to your Applications folder
 4. Open the application from your Applications folder
 
 ### Windows
-1. Download the latest release from the [Releases](https://github.com/j7j7/android-file-transfer/releases) page
+1. Download the latest release from the [Releases](https://github.com/j7j7/Android-File-Transfer/releases) page
 2. Run the installer (.exe) file
 3. Follow the installation prompts
 4. Launch the application from the Start Menu or desktop shortcut
@@ -114,8 +136,8 @@ A cross-platform application for transferring files between your computer and An
 
 ```bash
 # Clone the repository
-git clone https://github.com/j7j7/android-file-transfer.git
-cd android-file-transfer
+git clone https://github.com/j7j7/Android-File-Transfer.git
+cd Android-File-Transfer
 
 # Install dependencies
 npm install

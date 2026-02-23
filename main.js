@@ -1371,7 +1371,7 @@ function createApplicationMenu() {
             dialog.showMessageBox(mainWindow, {
               title: 'About Android File Transfer',
               message: `Android File Transfer v${version}`,
-              detail: 'A simple application for transferring files between your computer and Android devices.'
+              detail: 'A simple application for transferring files between your computer and Android devices.\n\nWritten by Jason Severn\n\nGitHub: https://github.com/j7j7/Android-File-Transfer'
             });
           }
         }

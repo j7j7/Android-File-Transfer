@@ -654,7 +654,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Update device connection to refresh file views
-  document.getElementById('connect-button').addEventListener('click', async () => {
+  const connectBtn = document.getElementById('connect-button');
+  if (connectBtn) {
+    connectBtn.addEventListener('click', async () => {
     try {
       const deviceSelect = document.getElementById('device-select');
       if (!deviceSelect || deviceSelect.value === '') {
@@ -681,7 +683,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       setStatus(`Error connecting to device: ${err.message}`);
     }
   });
-  
+  }
+
   // Create the debug container at the bottom
   addDebugContainer();
   
@@ -703,108 +706,196 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 /**
+ * Resolve drop destination: if dropped on a folder, use that folder; else use current path
+ * @param {Event} e - Drop event
+ * @param {HTMLElement} explorer - The explorer panel (local or android)
+ * @returns {{ destLocal: string, destAndroid: string }}
+ */
+function resolveDropDestination(e, explorer) {
+  const baseLocal = state.localPath;
+  const baseAndroid = state.androidPath.replace(/\\/g, '/');
+
+  let target = e.target;
+  while (target && target !== explorer) {
+    if (target.classList && target.classList.contains('folder-item')) {
+      const folderPath = target.dataset.sourcePath;
+      if (folderPath) {
+        if (explorer.id === 'local-explorer') {
+          return { destLocal: folderPath, destAndroid: baseAndroid };
+        }
+        return { destLocal: baseLocal, destAndroid: folderPath.replace(/\\/g, '/') };
+      }
+      break;
+    }
+    target = target.parentElement;
+  }
+  return { destLocal: baseLocal, destAndroid: baseAndroid };
+}
+
+/**
+ * Get the explorer panel under drop coordinates (or nearest by screen half if between panels)
+ * @param {number} clientX
+ * @param {number} clientY
+ * @returns {HTMLElement|null} local-explorer or android-explorer
+ */
+function getExplorerUnderPoint(clientX, clientY) {
+  const localExplorer = document.getElementById('local-explorer');
+  const androidExplorer = document.getElementById('android-explorer');
+  if (!localExplorer || !androidExplorer) return null;
+
+  const elements = document.elementsFromPoint(clientX, clientY);
+  for (const el of elements) {
+    if (el === localExplorer || localExplorer.contains(el)) return localExplorer;
+    if (el === androidExplorer || androidExplorer.contains(el)) return androidExplorer;
+  }
+  const midX = window.innerWidth / 2;
+  return clientX < midX ? localExplorer : androidExplorer;
+}
+
+/**
  * Setup drag and drop functionality for file explorer panels
  */
 function setupDragAndDrop() {
-  console.log('Setting up drag and drop functionality');
-  
   const localExplorer = document.getElementById('local-explorer');
   const androidExplorer = document.getElementById('android-explorer');
-  
+
   if (!localExplorer || !androidExplorer) {
-    console.error('Could not find explorer panels for drag and drop setup');
     return;
   }
-  
-  // Set up drag over event for both panels
-  [localExplorer, androidExplorer].forEach(explorer => {
-    explorer.addEventListener('dragover', (e) => {
-      e.preventDefault(); // Allow drop
-      e.dataTransfer.dropEffect = 'copy';
-      
-      // Add visual feedback
-      explorer.classList.add('drag-over');
-    });
-    
-    explorer.addEventListener('dragleave', (e) => {
-      // Remove visual feedback when dragging leaves
-      explorer.classList.remove('drag-over');
-    });
-    
-    explorer.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      explorer.classList.remove('drag-over');
-      
-      // Get dropped data
-      const data = e.dataTransfer.getData('text/plain');
-      if (!data) {
-        console.log('No data in drop event');
-        return;
+
+  const dragTarget = document.body;
+  dragTarget.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  }, false);
+
+  dragTarget.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    const explorer = getExplorerUnderPoint(e.clientX, e.clientY);
+    [localExplorer, androidExplorer].forEach(ex => {
+      const on = ex === explorer;
+      if (on) {
+        ex.classList.add('drag-over');
+        let target = e.target;
+        while (target && target !== ex) {
+          if (target.classList && target.classList.contains('folder-item')) {
+            ex.querySelectorAll('.folder-item.drop-target').forEach(el => el.classList.remove('drop-target'));
+            target.classList.add('drop-target');
+            break;
+          }
+          target = target.parentElement;
+        }
+      } else {
+        ex.classList.remove('drag-over');
+        ex.querySelectorAll('.folder-item.drop-target').forEach(el => el.classList.remove('drop-target'));
       }
-      
+    });
+  }, false);
+
+  dragTarget.addEventListener('dragleave', (e) => {
+    if (e.relatedTarget === null || !document.body.contains(e.relatedTarget)) {
+      [localExplorer, androidExplorer].forEach(ex => {
+        ex.classList.remove('drag-over');
+        ex.querySelectorAll('.folder-item.drop-target').forEach(el => el.classList.remove('drop-target'));
+      });
+    }
+  }, false);
+
+  dragTarget.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const explorer = getExplorerUnderPoint(e.clientX, e.clientY);
+    if (explorer) {
+      e.stopPropagation();
+      handleExplorerDrop(e, explorer);
+    }
+  }, true);
+
+}
+
+function handleExplorerDrop(e, explorer) {
+  e.preventDefault();
+  explorer.classList.remove('drag-over');
+  explorer.querySelectorAll('.folder-item.drop-target').forEach(el => el.classList.remove('drop-target'));
+
+  if (!state.selectedDevice && explorer.id === 'android-explorer') {
+    setStatus('Select a device first');
+    return;
+  }
+
+  const { destLocal, destAndroid } = resolveDropDestination(e, explorer);
+
+  const files = e.dataTransfer.files;
+  if (files && files.length > 0 && explorer.id === 'android-explorer') {
+    const itemsToTransfer = [];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const srcPath = f.path || path.join(state.localPath, f.name);
+      let isDir = false;
       try {
-        const dragData = JSON.parse(data);
-        
-        // Only handle file item drops
-        if (!dragData.isItem) {
-          console.log('Dropped data is not a file item');
-          return;
-        }
-        
-        // Determine source and destination
-        const isFromLocal = dragData.isLocal;
-        const isToLocal = explorer.id === 'local-explorer';
-        
-        // Don't allow dropping on same side
-        if (isFromLocal === isToLocal) {
-          setStatus('Cannot drop items on the same side');
-          return;
-        }
-        
-        console.log(`Drop: ${isFromLocal ? 'local' : 'Android'} → ${isToLocal ? 'local' : 'Android'}`);
-        console.log(`Dropped item: ${dragData.name} (${dragData.isDir ? 'folder' : 'file'})`);
-        
-        // Handle multiple selected items if available
-        const sourceSelectedItems = isFromLocal ? state.localSelectedItems : state.androidSelectedItems;
-        
-        if (sourceSelectedItems.size > 0) {
-          // Transfer only the dragged item
-          await handleDropTransfer([dragData], isFromLocal, isToLocal);
-        } else {
-          // Transfer all selected items
-          const itemsToTransfer = [];
-          
-          sourceSelectedItems.forEach(itemName => {
-            const itemPath = isFromLocal 
-              ? path.join(state.localPath, itemName)
-              : path.join(state.androidPath, itemName);
-            
-            // Get item metadata
-            const isDir = isFromLocal 
-              ? fs.existsSync(itemPath) && fs.statSync(itemPath).isDirectory()
-              : document.querySelector(`[data-name="${itemName}"]`)?.dataset?.isDir === 'true';
-            
-            const fileType = getFileType(itemName);
-            
-            itemsToTransfer.push({
-              name: itemName,
-              isDir: isDir === true,
-              isLocal: isFromLocal,
-              sourcePath: itemPath,
-              isItem: true,
-              fileType: fileType
-            });
-          });
-          
-          console.log(`Transferring ${itemsToTransfer.length} selected items`);
-          await handleDropTransfer(itemsToTransfer, isFromLocal, isToLocal);
-        }
-      } catch (err) {
-        console.error('Error handling drop:', err);
-        setStatus(`Error handling drop: ${err.message}`);
-      }
-    });
-  });
+        isDir = srcPath && fs.existsSync(srcPath) && fs.statSync(srcPath).isDirectory();
+      } catch (_) {}
+      itemsToTransfer.push({
+        name: f.name,
+        isDir: !!isDir,
+        isLocal: true,
+        sourcePath: srcPath,
+        isItem: true
+      });
+    }
+    if (itemsToTransfer.length > 0) {
+      handleDropTransfer(itemsToTransfer, true, false, destLocal, destAndroid);
+    }
+    return;
+  }
+
+  const data = e.dataTransfer.getData('text/plain');
+  if (!data) return;
+
+  try {
+    const dragData = JSON.parse(data);
+    if (!dragData.isItem) return;
+
+    const isFromLocal = dragData.isLocal;
+    const isToLocal = explorer.id === 'local-explorer';
+
+    if (isFromLocal === isToLocal) {
+      setStatus('Cannot drop items on the same side');
+      return;
+    }
+
+    const sourceSelectedItems = isFromLocal ? state.localSelectedItems : state.androidSelectedItems;
+    const draggedInSelection = sourceSelectedItems.has(dragData.name);
+
+    let itemsToTransfer;
+    if (draggedInSelection && sourceSelectedItems.size > 1) {
+      itemsToTransfer = [];
+      sourceSelectedItems.forEach(itemName => {
+        const itemPath = isFromLocal
+          ? path.join(state.localPath, itemName)
+          : path.join(state.androidPath, itemName).replace(/\\/g, '/');
+        const sel = isFromLocal ? 'local' : 'android';
+        const escaped = itemName.replace(/"/g, '\\"').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+        const isDir = isFromLocal
+          ? fs.existsSync(itemPath) && fs.statSync(itemPath).isDirectory()
+          : document.querySelector(`#${sel}-files .file-item[data-name="${escaped}"]`)?.dataset?.isDir === 'true';
+        itemsToTransfer.push({
+          name: itemName,
+          isDir: !!isDir,
+          isLocal: isFromLocal,
+          sourcePath: itemPath,
+          isItem: true
+        });
+      });
+    } else {
+      itemsToTransfer = [dragData];
+    }
+
+    handleDropTransfer(itemsToTransfer, isFromLocal, isToLocal, destLocal, destAndroid);
+  } catch (err) {
+    console.error('Error handling drop:', err);
+    setStatus(`Error handling drop: ${err.message}`);
+  }
 }
 
 /**
@@ -812,80 +903,85 @@ function setupDragAndDrop() {
  * @param {Array} items - Items to transfer
  * @param {boolean} isFromLocal - True if transferring from local
  * @param {boolean} isToLocal - True if transferring to local
+ * @param {string} destLocalPath - Local destination path (for Android→local)
+ * @param {string} destAndroidPath - Android destination path (for local→Android)
  */
-async function handleDropTransfer(items, isFromLocal, isToLocal) {
-  if (items.length === 0) {
+async function handleDropTransfer(items, isFromLocal, isToLocal, destLocalPath, destAndroidPath) {
+  if (items.length === 0) return;
+  if (state.isTransferring) {
+    setStatus('Transfer already in progress');
     return;
   }
-  
+  state.isTransferring = true;
+
+  const destLocal = destLocalPath || state.localPath;
+  const destAndroid = (destAndroidPath || state.androidPath).replace(/\\/g, '/');
+
   setStatus(`Copying ${items.length} item(s) ${isFromLocal ? 'from local' : 'from Android'} ${isToLocal ? 'to local' : 'to Android'}...`);
-  
+
   let successCount = 0;
   let errorCount = 0;
-  
+
+  try {
   for (const item of items) {
     try {
+      const sanitizedName = item.name.replace(/[\\/:*?"<>|]/g, '_');
       if (isFromLocal && !isToLocal) {
-        // Local to Android
+        const androidTarget = destAndroid.endsWith('/') ? `${destAndroid}${sanitizedName}` : `${destAndroid}/${sanitizedName}`;
         if (item.isDir) {
-          // Transfer folder
-          await transferOps.transferFolderToAndroid(
-            item.name,
+          const result = await transferOps.transferLocalFolderToAndroid(
+            state.selectedDevice,
             item.sourcePath,
-            state.androidPath,
-            state.selectedDevice
+            androidTarget,
+            setStatus
           );
-          successCount++;
+          successCount += result.success;
+          errorCount += result.errors;
         } else {
-          // Transfer file
-          await transferOps.transferFileToAndroid(
-            item.name,
+          const ok = await transferOps.transferLocalFileToAndroid(
+            state.selectedDevice,
             item.sourcePath,
-            state.androidPath,
-            state.selectedDevice
+            androidTarget,
+            setStatus
           );
-          successCount++;
+          if (ok) successCount++; else errorCount++;
         }
       } else if (!isFromLocal && isToLocal) {
-        // Android to local
+        const localTarget = path.join(destLocal, sanitizedName);
+        const androidSource = item.sourcePath.replace(/\\/g, '/');
         if (item.isDir) {
-          // Transfer folder
-          await transferOps.pullFolder(
-            item.name,
-            item.sourcePath,
-            state.localPath,
-            state.selectedDevice
+          const result = await transferOps.transferAndroidFolderToLocal(
+            state.selectedDevice,
+            androidSource,
+            localTarget,
+            setStatus
           );
-          successCount++;
+          successCount += result.success;
+          errorCount += result.errors;
         } else {
-          // Transfer file
-          await transferOps.pullFile(
-            item.name,
-            item.sourcePath,
-            state.localPath,
-            state.selectedDevice
+          const ok = await transferOps.transferAndroidFileToLocal(
+            state.selectedDevice,
+            androidSource,
+            localTarget,
+            setStatus
           );
-          successCount++;
+          if (ok) successCount++; else errorCount++;
         }
       }
-      
-      console.log(`Transferred: ${item.name} (${item.isDir ? 'folder' : 'file'})`);
     } catch (err) {
       console.error(`Error transferring ${item.name}:`, err);
       errorCount++;
     }
   }
-  
-  // Force small delay to ensure file system operations complete
+
   await new Promise(resolve => setTimeout(resolve, 100));
-  
-  // Clear selections and refresh both views
   clearSelections();
   await loadLocalFiles();
   await loadAndroidFiles();
-  
   setStatus(`Copy complete. Success: ${successCount}, Errors: ${errorCount}`, 'success');
-  debugLog(`Drop transfer complete. Success: ${successCount}, Errors: ${errorCount}`);
+  } finally {
+    state.isTransferring = false;
+  }
 }
 
 /**

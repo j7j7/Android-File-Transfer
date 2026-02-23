@@ -46,4 +46,6 @@
 ## Features
 - USB file transfer between computer and Android devices
 - File viewing capabilities
-- Dark mode support on macOS 
+- Dark mode support on macOS
+- Drag and drop: copy files/folders between local and Android panels, or from OS (Finder/Explorer) to Android
+- Drop on folder copies into that folder; drop on panel area copies into current path 

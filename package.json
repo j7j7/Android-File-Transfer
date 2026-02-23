@@ -1,6 +1,6 @@
 {
   "name": "android-file-transfer",
-  "version": "1.0.0",
+  "version": "1.4.0",
   "description": "Application to manage and transfer files between your computer and Android devices via USB",
   "main": "main.js",
   "scripts": {
@@ -10,7 +10,7 @@
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac"
   },
-  "author": "",
+  "author": "Jason Severn",
   "license": "MIT",
   "devDependencies": {
     "canvas": "^3.1.0",
@@ -24,7 +24,7 @@
     "temp": "^0.9.4"
   },
   "build": {
-    "appId": "com.androidfiletransfer",
+    "appId": "com.jasonsevern.androidfiletransfer",
     "productName": "Android File Transfer",
     "files": [
       "**/*",
@@ -44,7 +44,8 @@
       "icon": "icon.png",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "darkModeSupport": true
+      "darkModeSupport": true,
+      "identity": "And 7 Limited (5K28TM7V5T)"
     },
     "win": {
       "target": [
@@ -52,24 +53,7 @@
         "portable"
       ],
       "icon": "build/icon.ico",
-      "artifactName": "Android-File-Transfer-Setup-${version}.${ext}"
-    },
-    "extraResources": [
-      {
-        "from": "platform-tools/",
-        "to": "platform-tools/",
-        "filter": ["**/*"]
-      }
-    ],
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Android File Transfer"
-    },
-    "portable": {
-      "artifactName": "Android-File-Transfer-Portable-${version}.${ext}"
+      "artifactName": "Android-File-Transfer-${version}.${ext}"
     },
     "dmg": {
       "contents": [
